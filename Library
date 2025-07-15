@@ -7,7 +7,6 @@ local localPlayer    = players.LocalPlayer
 local mouse          = localPlayer:GetMouse()
 
 local menu           = game:GetObjects("rbxassetid://12702460854")[1]
-syn.protect_gui(menu)
 menu.bg.Position     = UDim2.new(0.5,-menu.bg.Size.X.Offset/2,0.5,-menu.bg.Size.Y.Offset/2)
 menu.Parent          = game:GetService("CoreGui")
 menu.bg.pre.Text = 'Seere<font color="#c375ae">.vip</font> - fiji was here!!!!'
