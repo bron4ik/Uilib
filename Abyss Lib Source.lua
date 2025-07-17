@@ -4086,26 +4086,10 @@ do
                 end
             })
             
-            local ClickGUI = Settings:Section("Click GUI", "Right")
-            
-            ClickGUI:Toggle({
-                Title = "Enable Anime",
-                Callback = function(State)
-                    Window.ToggleAnime(State)
-                end
-            })
-            
-            ClickGUI:Dropdown({
-                Title = "Anime",
-                List = {"Astolfo", "Violet", "Rem", "Aiko", "Asuka"},
-                Default = "Astolfo",
-                Callback = function(Name)
-                    Window.ChangeAnime(Name)
-                end
-            })
+            local ClickGUI = Settings:Section("Unload", "Right")
 
             ClickGUI:Button({
-                Title = "Self Destruct",
+                Title = "Unload Cheat",
                 Callback = function()
                     Library.SelfDestruct()
                     Additional()
