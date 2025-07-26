@@ -739,10 +739,7 @@ end
 
 function EspInterface.getCharacter(player)
     local playersFolder = workspace:FindFirstChild("Players")
-    if not playersFolder then return nil end
-    
-    -- Ищем модель игрока в папке Players по его имени
-    return playersFolder:FindFirstChild(player.Name)
+    return playersFolder and playersFolder:FindFirstChild(player.Name) or player.Character
 end
 
 function EspInterface.getHealth(player)
