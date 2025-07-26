@@ -779,19 +779,13 @@ end
 
 function EspInterface.getHealth(player)
     local character = EspInterface.getCharacter(player)
-    if not character then
-        return 0, 100  -- Возвращаем 0 здоровья если персонаж не найден
-    end
+    if not character then return 100, 100 end
     
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        -- Проверяем альтернативные варианты хранения здоровья
-        local healthValue = character:FindFirstChild("Health")
-        if healthValue and healthValue:IsA("NumberValue") then
-            return healthValue.Value, 100
-        end
-        return 100, 100  -- Значения по умолчанию
-    end
+    if not humanoid then return 100, 100 end
     
     return humanoid.Health, humanoid.MaxHealth
 end
+
+-- Важно: это должна быть последняя строка в файле
+return EspInterface
