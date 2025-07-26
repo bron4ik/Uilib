@@ -66,15 +66,32 @@ local devwhitelisted = {
 	["IiminaI_space"] = true,
 	["Pozzews"] = true,
 }
+
+local function safeFindChild(parent, name, className)
+    if not parent or not parent.FindFirstChild then return nil end
+    local child = parent:FindFirstChild(name)
+    return child and (not className or child:IsA(className)) and child or nil
+end
+
+
 -- functions
 local function isBodyPart(name)
     if not name or type(name) ~= "string" then return false end
-    return name == "Head" 
-        or name:find("Torso") 
-        or name:find("Leg") 
-        or name:find("Arm") 
-        or name:find("Foot") 
-        or name:find("Hand")
+    
+    -- Полный список возможных частей тела для R6 и R15
+    local bodyParts = {
+        "Head", "Torso", "UpperTorso", "LowerTorso",
+        "LeftArm", "RightArm", "LeftLeg", "RightLeg",
+        "LeftFoot", "RightFoot", "LeftHand", "RightHand",
+        "HumanoidRootPart"
+    }
+    
+    for _, part in ipairs(bodyParts) do
+        if name == part or name:match(part) then
+            return true
+        end
+    end
+    return false
 end
 
 local function getBoundingBox(parts)
@@ -228,11 +245,13 @@ function EspObject:Update()
     self.enabled = self.options.enabled and not (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId))
 
     local head = nil
-    if self.enabled and self.character then
-        head = self.character:FindFirstChild("Head")
-     end
+    if self.enabled and self.character and self.character:IsA("Model") then
+        head = self.character:FindFirstChild("Head") or
+               self.character:FindFirstChild("UpperTorso") or
+               self.character:FindFirstChild("HumanoidRootPart")
+    end
 
-    if not head then
+    if not head or not head:IsA("BasePart") then
         self.charCache = {}
         self.onScreen = false
         return
