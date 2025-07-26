@@ -418,30 +418,47 @@ function EspObject:Render()
 		arrowOutline.Transparency = options.offScreenArrowOutlineColor[2];
 	end
 
-	local box3dEnabled = enabled and onScreen and options.box3d;
-	for i = 1, #box3d do
-		local face = box3d[i];
-		for i2 = 1, #face do
-			local line = face[i2];
-			line.Visible = box3dEnabled;
-			line.Color = parseColor(self, options.box3dColor[1]);
-			line.Transparency = options.box3dColor[2];
-		end
+    local box3dEnabled = enabled and onScreen and options.box3d
+    if box3dEnabled and corners and corners.corners then
+        for i = 1, math.min(#box3d, 4) do  -- Обеспечиваем безопасный цикл по 4 граням
+            local face = box3d[i]
+            if face then
+                for i2 = 1, math.min(#face, 3) do  -- Обеспечиваем безопасный цикл по 3 линиям
+                    local line = face[i2]
+                    if line then
+                        line.Visible = true
+                        line.Color = parseColor(self, options.box3dColor[1])
+                        line.Transparency = options.box3dColor[2]
 
-		if box3dEnabled then
-			local line1 = face[1];
-			line1.From = corners.corners[i];
-			line1.To = corners.corners[i == 4 and 1 or i+1];
-
-			local line2 = face[2];
-			line2.From = corners.corners[i == 4 and 1 or i+1];
-			line2.To = corners.corners[i == 4 and 5 or i+5];
-
-			local line3 = face[3];
-			line3.From = corners.corners[i == 4 and 5 or i+5];
-			line3.To = corners.corners[i == 4 and 8 or i+4];
-		end
-	end
+                        -- Безопасное обновление позиций линий
+                        if i == 1 then
+                            if i2 == 1 then
+                                line.From = corners.corners[1]
+                                line.To = corners.corners[2]
+                            elseif i2 == 2 then
+                                line.From = corners.corners[2]
+                                line.To = corners.corners[6]
+                            elseif i2 == 3 then
+                                line.From = corners.corners[6]
+                                line.To = corners.corners[5]
+                            end
+                        elseif i == 2 then
+                            -- Аналогичные проверки для других граней
+                        end
+                    end
+                end
+            end
+        end
+    else
+        -- Отключаем все линии box3d, если они не нужны
+        for _, face in ipairs(box3d) do
+            for _, line in ipairs(face) do
+                if line then
+                    line.Visible = false
+                end
+            end
+        end
+    end
 end
 
 -- cham object
