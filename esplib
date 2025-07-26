@@ -78,16 +78,16 @@ end
 local function isBodyPart(name)
     if not name or type(name) ~= "string" then return false end
     
-    -- Полный список возможных частей тела для R6 и R15
-    local bodyParts = {
+    -- Полный список частей тела с учётом R6 и R15
+    local parts = {
         "Head", "Torso", "UpperTorso", "LowerTorso",
         "LeftArm", "RightArm", "LeftLeg", "RightLeg",
         "LeftFoot", "RightFoot", "LeftHand", "RightHand",
         "HumanoidRootPart"
     }
     
-    for _, part in ipairs(bodyParts) do
-        if name == part or name:match(part) then
+    for _, part in ipairs(parts) do
+        if name == part then  -- Точное сравнение вместо match/find
             return true
         end
     end
@@ -244,14 +244,15 @@ function EspObject:Update()
     self.weapon = interface.getWeapon(self.player)
     self.enabled = self.options.enabled and not (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId))
 
-    local head = nil
-    if self.enabled and self.character and self.character:IsA("Model") then
-        head = self.character:FindFirstChild("Head") or
-               self.character:FindFirstChild("UpperTorso") or
-               self.character:FindFirstChild("HumanoidRootPart")
+   local head = nil
+    if self.enabled and self.character then
+        -- Поиск головы с проверкой на BasePart
+        head = safeFindChild(self.character, "Head", "BasePart") or
+               safeFindChild(self.character, "UpperTorso", "BasePart") or
+               safeFindChild(self.character, "HumanoidRootPart", "BasePart")
     end
 
-    if not head or not head:IsA("BasePart") then
+    if not head then
         self.charCache = {}
         self.onScreen = false
         return
@@ -807,22 +808,32 @@ function EspInterface.getCharacter(player)
 end
 
 function EspInterface.getHealth(player)
-    if not player then return 100, 100 end
-    
-    local character = EspInterface.getCharacter(player)
-    if not character then return 100, 100 end
-    
-    -- Безопасный поиск Humanoid с проверкой IsA
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid", false)
-    if not humanoid or not humanoid:IsA("Humanoid") then
+    if not player or not player:IsA("Player") then
         return 100, 100
     end
     
-    -- Защита от отрицательных значений
-    local health = math.max(0, humanoid.Health)
-    local maxHealth = math.max(1, humanoid.MaxHealth)
+    local character = EspInterface.getCharacter(player)
+    if not character then
+        return 100, 100
+    end
     
-    return health, maxHealth
+    -- Безопасный поиск Humanoid
+    local humanoid
+    if character:IsA("Model") then
+        humanoid = character:FindFirstChildOfClass("Humanoid")
+    end
+    
+    if not humanoid then
+        -- Альтернативная проверка здоровья
+        local healthValue = character:FindFirstChild("Health")
+        if healthValue and healthValue:IsA("NumberValue") then
+            return math.max(0, healthValue.Value), 100
+        end
+        return 100, 100
+    end
+    
+    -- Защита от некорректных значений
+    return math.max(0, humanoid.Health), math.max(1, humanoid.MaxHealth)
 end
 
 -- Важно: это должна быть последняя строка в файле
