@@ -205,64 +205,66 @@ function EspObject:Destruct()
 end
 
 function EspObject:Update()
-    local interface = self.interface;
+    local interface = self.interface
 
-    self.options = interface.teamSettings[interface.isFriendly(self.player) and "friendly" or "enemy"];
-    self.character = interface.getCharacter(self.player);
+    self.options = interface.teamSettings[interface.isFriendly(self.player) and "friendly" or "enemy"]
+    self.character = interface.getCharacter(self.player)
     
-    -- Если папки Players нет, отключаем ESP
-    if not workspace:FindFirstChild("Players") then
-        self.charCache = {};
-        self.onScreen = false;
-        self.enabled = false;
-        return;
+    if not self.character then
+        self.charCache = {}
+        self.onScreen = false
+        self.enabled = false
+        return
     end
     
-    self.health, self.maxHealth = interface.getHealth(self.player);
-    self.weapon = interface.getWeapon(self.player);
-    self.enabled = self.options.enabled and self.character and not
-        (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId));
+    self.health, self.maxHealth = interface.getHealth(self.player)
+    self.weapon = interface.getWeapon(self.player)
+    self.enabled = self.options.enabled and not (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId))
 
-    local head = self.enabled and findFirstChild(self.character, "Head");
+    local head = self.enabled and findFirstChild(self.character, "Head")
     if not head then
-        self.charCache = {};
-        self.onScreen = false;
-        return;
+        self.charCache = {}
+        self.onScreen = false
+        return
     end
 
-	local _, onScreen = worldToScreen(head.Position);
-	self.onScreen = onScreen;
-	if camera then
-		self.distance = (camera.CFrame.p - head.Position).Magnitude;
-	end
+    local _, onScreen = worldToScreen(head.Position)
+    self.onScreen = onScreen
+    if camera then
+        self.distance = (camera.CFrame.p - head.Position).Magnitude
+    end
 
-	if interface.sharedSettings.limitDistance and depth > interface.sharedSettings.maxDistance then
-		self.onScreen = false;
-	end
+    if interface.sharedSettings.limitDistance and self.distance and self.distance > interface.sharedSettings.maxDistance then
+        self.onScreen = false
+    end
 
-	if self.onScreen then
-		local cache = self.charCache;
-		local children = getChildren(self.character);
-		if not cache[1] or self.childCount ~= #children then
-			clear(cache);
+    if self.onScreen then
+        local cache = self.charCache
+        local children = getChildren(self.character)
+        if not cache[1] or self.childCount ~= #children then
+            clear(cache)
 
-			for i = 1, #children do
-				local part = children[i];
-				if isA(part, "BasePart") and isBodyPart(part.Name) then
-					cache[#cache + 1] = part;
-				end
-			end
+            for i = 1, #children do
+                local part = children[i]
+                if isA(part, "BasePart") and isBodyPart(part.Name) then
+                    cache[#cache + 1] = part
+                end
+            end
 
-			self.childCount = #children;
-		end
+            self.childCount = #children
+        end
 
-		self.corners = calculateCorners(getBoundingBox(cache));
-	elseif self.options.offScreenArrow then
-		local cframe = camera.CFrame;
-		local flat = fromMatrix(cframe.Position, cframe.RightVector, Vector3.yAxis);
-		local objectSpace = pointToObjectSpace(flat, head.Position);
-		self.direction = Vector2.new(objectSpace.X, objectSpace.Z).Unit;
-	end
+        if #cache > 0 then
+            self.corners = calculateCorners(getBoundingBox(cache))
+        end
+    elseif self.options.offScreenArrow then
+        local cframe = camera and camera.CFrame
+        if cframe then
+            local flat = fromMatrix(cframe.Position, cframe.RightVector, Vector3.yAxis)
+            local objectSpace = pointToObjectSpace(flat, head.Position)
+            self.direction = Vector2.new(objectSpace.X, objectSpace.Z).Unit
+        end
+    end
 end
 
 function EspObject:Render()
