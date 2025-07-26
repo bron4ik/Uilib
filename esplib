@@ -68,7 +68,13 @@ local devwhitelisted = {
 }
 -- functions
 local function isBodyPart(name)
-    return name == "Head" or name:find("Torso") or name:find("Leg") or name:find("Arm") or name:find("Foot") or name:find("Hand")
+    if not name or type(name) ~= "string" then return false end
+    return name == "Head" 
+        or name:find("Torso") 
+        or name:find("Leg") 
+        or name:find("Arm") 
+        or name:find("Foot") 
+        or name:find("Hand")
 end
 
 local function getBoundingBox(parts)
@@ -221,7 +227,11 @@ function EspObject:Update()
     self.weapon = interface.getWeapon(self.player)
     self.enabled = self.options.enabled and not (#interface.whitelist > 0 and not find(interface.whitelist, self.player.UserId))
 
-    local head = self.enabled and findFirstChild(self.character, "Head")
+    local head = nil
+    if self.enabled and self.character then
+        head = self.character:FindFirstChild("Head")
+     end
+
     if not head then
         self.charCache = {}
         self.onScreen = false
@@ -246,7 +256,7 @@ function EspObject:Update()
 
             for i = 1, #children do
                 local part = children[i]
-                if isA(part, "BasePart") and isBodyPart(part.Name) then
+                if isA(part, "BasePart") and (part.Name) then
                     cache[#cache + 1] = part
                 end
             end
