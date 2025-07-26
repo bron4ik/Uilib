@@ -756,29 +756,36 @@ function EspInterface.getTeamColor(player)
 	return player.Team and player.Team.TeamColor and player.Team.TeamColor.Color;
 end
 
+-- В функции EspInterface.getCharacter замените текущую реализацию на:
 function EspInterface.getCharacter(player)
+    -- Сначала проверяем стандартное расположение персонажа
+    if player.Character then
+        return player.Character
+    end
+    
+    -- Если нет, ищем в возможной папке Players
     local playersFolder = workspace:FindFirstChild("Players")
-    return playersFolder and playersFolder:FindFirstChild(player.Name) or player.Character
+    if playersFolder then
+        return playersFolder:FindFirstChild(player.Name)
+    end
+    
+    -- Если ничего не найдено
+    return nil
 end
 
+-- В функции EspInterface.getHealth убедитесь, что она корректно обрабатывает случаи, когда персонаж не найден:
 function EspInterface.getHealth(player)
     local character = EspInterface.getCharacter(player)
-    if not character then return 100, 100 end
+    if not character then 
+        return 0, 100  -- Возвращаем 0 здоровья, если персонаж не найден
+    end
     
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if humanoid then
         return humanoid.Health, humanoid.MaxHealth
     end
-    return 100, 100
-end
-
-function EspInterface.getHealth(player)
-	local character = player and EspInterface.getCharacter(player);
-	local humanoid = character and findFirstChildOfClass(character, "Humanoid");
-	if humanoid then
-		return humanoid.Health, humanoid.MaxHealth;
-	end
-	return 100, 100;
+    
+    return 100, 100  -- Значения по умолчанию, если humanoid не найден
 end
 
 return EspInterface;
