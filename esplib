@@ -807,13 +807,22 @@ function EspInterface.getCharacter(player)
 end
 
 function EspInterface.getHealth(player)
+    if not player then return 100, 100 end
+    
     local character = EspInterface.getCharacter(player)
     if not character then return 100, 100 end
     
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return 100, 100 end
+    -- Безопасный поиск Humanoid с проверкой IsA
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid", false)
+    if not humanoid or not humanoid:IsA("Humanoid") then
+        return 100, 100
+    end
     
-    return humanoid.Health, humanoid.MaxHealth
+    -- Защита от отрицательных значений
+    local health = math.max(0, humanoid.Health)
+    local maxHealth = math.max(1, humanoid.MaxHealth)
+    
+    return health, maxHealth
 end
 
 -- Важно: это должна быть последняя строка в файле
