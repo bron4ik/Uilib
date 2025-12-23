@@ -193,10 +193,10 @@ local Library do
         },
 
         Folders = {
-            Directory = "testpath",
-            Configs = "testpath/Configs",
-            Assets = "testpath/Assets",
-            Themes = "testpath/Themes"
+            Directory = "ArabHub",
+            Configs = "ArabHub/Configs",
+            Assets = "ArabHub/Assets",
+            Themes = "ArabHub/Themes"
         },
 
         Images = { -- you're welcome to reupload the images and replace it with your own links
