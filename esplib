@@ -703,9 +703,10 @@ function EspInterface.getTeamColor(player)
 	return player.Team and player.Team.TeamColor and player.Team.TeamColor.Color;
 end
 
-function EspInterface.getCharacter(player)
-	return player.Character;
+function EspInterface.getCharacter(model)
+	return model;
 end
+
 
 function EspInterface.getHealth(model)
 	local humanoid = model:FindFirstChildOfClass("Humanoid");
