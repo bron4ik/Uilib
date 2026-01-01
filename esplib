@@ -3,7 +3,6 @@
 local runService = game:GetService("RunService");
 local players = game:GetService("Players");
 local workspace = game:GetService("Workspace");
-local TARGET_FOLDER = game:GetService("Workspace");
 
 -- variables
 local localPlayer = players.LocalPlayer;
@@ -635,42 +634,30 @@ end
 function EspInterface.Load()
 	assert(not EspInterface._hasLoaded, "Esp has already been loaded.");
 
-	local function createObject(model)
-		EspInterface._objectCache[model] = {
-			EspObject.new(model, EspInterface),
-			ChamObject.new(model, EspInterface)
+	local function createObject(player)
+		EspInterface._objectCache[player] = {
+			EspObject.new(player, EspInterface),
+			ChamObject.new(player, EspInterface)
 		};
 	end
 
-	local function removeObject(model)
-		local object = EspInterface._objectCache[model];
+	local function removeObject(player)
+		local object = EspInterface._objectCache[player];
 		if object then
 			for i = 1, #object do
 				object[i]:Destruct();
 			end
-			EspInterface._objectCache[model] = nil;
+			EspInterface._objectCache[player] = nil;
 		end
 	end
 
-	-- существующие модели
-	for _, model in ipairs(TARGET_FOLDER:GetChildren()) do
-		if model:IsA("Model") then
-			createObject(model)
-		end
+	local plrs = players:GetPlayers();
+	for i = 2, #plrs do
+		createObject(plrs[i]);
 	end
 
-	-- добавление
-	EspInterface.folderAdded = TARGET_FOLDER.ChildAdded:Connect(function(model)
-		if model:IsA("Model") then
-			createObject(model)
-		end
-	end)
-
-	-- удаление
-	EspInterface.folderRemoved = TARGET_FOLDER.ChildRemoved:Connect(function(model)
-		removeObject(model)
-	end)
-
+	EspInterface.playerAdded = players.PlayerAdded:Connect(createObject);
+	EspInterface.playerRemoving = players.PlayerRemoving:Connect(removeObject);
 	EspInterface._hasLoaded = true;
 end
 
@@ -690,31 +677,29 @@ function EspInterface.Unload()
 end
 
 -- game specific functions
-function EspInterface.getWeapon(model)
-	local tool = model:FindFirstChildOfClass("Tool")
-	return tool and tool.Name or "Unknown"
+function EspInterface.getWeapon(player)
+	return "Unknown";
 end
 
 function EspInterface.isFriendly(player)
-	return false;
+	return player.Team and player.Team == localPlayer.Team;
 end
 
 function EspInterface.getTeamColor(player)
 	return player.Team and player.Team.TeamColor and player.Team.TeamColor.Color;
 end
 
-function EspInterface.getCharacter(model)
-	return model;
+function EspInterface.getCharacter(player)
+	return player.Character;
 end
 
-
-function EspInterface.getHealth(model)
-	local humanoid = model:FindFirstChildOfClass("Humanoid");
+function EspInterface.getHealth(player)
+	local character = player and EspInterface.getCharacter(player);
+	local humanoid = character and findFirstChildOfClass(character, "Humanoid");
 	if humanoid then
 		return humanoid.Health, humanoid.MaxHealth;
 	end
 	return 100, 100;
 end
-
 
 return EspInterface;
