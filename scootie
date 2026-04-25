@@ -995,35 +995,37 @@ local Library do
     end
 
     Library.DeleteConfig = function(self, Config)
-        if isfile(Library.Folders.Configs .. "/" .. Config) then 
-            delfile(Library.Folders.Configs .. "/" .. Config)
+        -- Config может быть без .json (после нашего strip)
+        local path = Library.Folders.Configs .. "/" .. Config
+        if not isfile(path) then
+            path = Library.Folders.Configs .. "/" .. Config .. ".json"
+        end
+        if isfile(path) then
+            delfile(path)
         end
     end
 
     Library.RefreshConfigsList = function(self, Element)
-        local CurrentList = { }
         local List = { }
 
         local ConfigFolderName = StringGSub(Library.Folders.Configs, Library.Folders.Directory .. "/", "")
 
         for Index, Value in listfiles(Library.Folders.Configs) do
-            local FileName = StringGSub(Value, Library.Folders.Directory .. "\\" .. ConfigFolderName .. "\\", "")
-            List[Index] = FileName
-        end
-
-        local IsNew = #List ~= CurrentList
-
-        if not IsNew then
-            for Index = 1, #List do
-                if List[Index] ~= CurrentList[Index] then
-                    IsNew = true
-                    break
-                end
+            -- Убираем путь — поддержка и / и \
+            local FileName = Value
+            FileName = StringGSub(FileName, Library.Folders.Directory .. "/" .. ConfigFolderName .. "/", "")
+            FileName = StringGSub(FileName, Library.Folders.Directory .. "\\" .. ConfigFolderName .. "\\", "")
+            FileName = StringGSub(FileName, Library.Folders.Configs .. "/", "")
+            FileName = StringGSub(FileName, Library.Folders.Configs .. "\\", "")
+            -- Убираем .json расширение для отображения
+            FileName = StringGSub(FileName, "%.json$", "")
+            if FileName ~= "" then
+                List[Index] = FileName
             end
-        else
-            CurrentList = List
-            Element:Refresh(CurrentList)
         end
+
+        -- Всегда обновляем список
+        Element:Refresh(List)
     end
 
     Library.ChangeItemTheme = function(self, Item, Properties)
@@ -6426,21 +6428,22 @@ local Library do
 
                     CreateAndDeleteButton:Add("Create", function()
                         if ConfigName and ConfigName ~= "" then
-                            if not isfile(Library.Folders.Configs .. "/" .. ConfigName .. ".json") then
-                                writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
-                                Library:Notification("Success", "Created config "..ConfigName .. " succesfully", 5)
+                            local path = Library.Folders.Configs .. "/" .. ConfigName .. ".json"
+                            if not isfile(path) then
+                                writefile(path, Library:GetConfig())
+                                Library:Notification("Success", "Created config " .. ConfigName, 5)
                                 Library:RefreshConfigsList(ConfigsSearchbox)
                             else
-                                Library:Notification("Error", "Config with the name "..ConfigName .. " already exists", 5)
-                                return
+                                Library:Notification("Error", "Config " .. ConfigName .. " already exists", 5)
                             end
                         end
                     end)
 
                     CreateAndDeleteButton:Add("Delete", function()
-                        if ConfigSelected then
+                        if ConfigSelected and ConfigSelected ~= "" then
                             Library:DeleteConfig(ConfigSelected)
-                            Library:Notification("Success", "Deleted config "..ConfigSelected .. " succesfully", 5)
+                            Library:Notification("Success", "Deleted config " .. ConfigSelected, 5)
+                            ConfigSelected = nil
                             Library:RefreshConfigsList(ConfigsSearchbox)
                         end
                     end)
@@ -6448,22 +6451,39 @@ local Library do
                     local LoadAndSaveButton = ConfigsSection:Button()    
 
                     LoadAndSaveButton:Add("Load", function()
-                        if ConfigSelected then
-                            local Success, Result = Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. ConfigSelected))
-
-                            if Success then 
-                                Library:Notification("Success", "Loaded config "..ConfigSelected .. " succesfully", 5)
+                        if ConfigSelected and ConfigSelected ~= "" then
+                            local path = Library.Folders.Configs .. "/" .. ConfigSelected .. ".json"
+                            if not isfile(path) then
+                                path = Library.Folders.Configs .. "/" .. ConfigSelected
+                            end
+                            if not isfile(path) then
+                                Library:Notification("Error", "Config file not found: " .. ConfigSelected, 5)
+                                return
+                            end
+                            local data = readfile(path)
+                            if not data or data == "" then
+                                Library:Notification("Error", "Config is empty or unreadable", 5)
+                                return
+                            end
+                            local Success, Result = Library:LoadConfig(data)
+                            if Success then
+                                Library:Notification("Success", "Loaded config " .. ConfigSelected, 5)
                             else
-                                Library:Notification("Error", "Failed to load config "..ConfigSelected .. " report this to the devs:\n"..Result, 5)
+                                Library:Notification("Error", "Failed to load: " .. tostring(Result), 5)
                             end
                         end
                     end)
 
                     LoadAndSaveButton:Add("Save", function()
-                        if ConfigName and ConfigName ~= "" then
-                            writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
-                            Library:Notification("Success", "Saved config "..ConfigName .. " succesfully", 5)
+                        -- Сохраняем по выбранному конфигу или по имени из textbox
+                        local name = (ConfigSelected and ConfigSelected ~= "" and ConfigSelected) or ConfigName
+                        if name and name ~= "" then
+                            local path = Library.Folders.Configs .. "/" .. name .. ".json"
+                            writefile(path, Library:GetConfig())
+                            Library:Notification("Success", "Saved config " .. name, 5)
                             Library:RefreshConfigsList(ConfigsSearchbox)
+                        else
+                            Library:Notification("Error", "Select a config or enter a name", 5)
                         end
                     end)
 
