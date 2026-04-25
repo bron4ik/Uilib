@@ -247,16 +247,22 @@ local Library do
     end
 
     -- Images
-    for Index, Value in Library.Images do 
-        local ImageData = Value
-
-        local ImageName = ImageData[1]
-        local ImageLink = ImageData[2]
-        
-        if not isfile(Library.Folders.Assets .. "/" .. ImageName) then
-            writefile(Library.Folders.Assets .. "/" .. ImageName, game:HttpGet(ImageLink))
+    -- Загружаем картинки асинхронно
+    task.spawn(function()
+        for Index, Value in Library.Images do
+            local ImageData  = Value
+            local ImageName  = ImageData[1]
+            local ImageLink  = ImageData[2]
+            if not isfile(Library.Folders.Assets .. "/" .. ImageName) then
+                local ok, result = pcall(function()
+                    return game:HttpGet(ImageLink)
+                end)
+                if ok and result then
+                    writefile(Library.Folders.Assets .. "/" .. ImageName, result)
+                end
+            end
         end
-    end
+    end)
 
     -- Tweening
     local Tween = { } do
@@ -747,8 +753,28 @@ local Library do
                 return Font.new(getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".json"))
             end
 
-            if not isfile(Library.Folders.Assets .. "/" .. Name .. ".ttf") then 
-                writefile(Library.Folders.Assets .. "/" .. Name .. ".ttf", game:HttpGet(Data.Url))
+            -- Загружаем шрифт асинхронно если его нет
+            if not isfile(Library.Folders.Assets .. "/" .. Name .. ".ttf") then
+                task.spawn(function()
+                    local ok, result = pcall(function()
+                        return game:HttpGet(Data.Url)
+                    end)
+                    if ok and result then
+                        writefile(Library.Folders.Assets .. "/" .. Name .. ".ttf", result)
+                        local FontData = {
+                            name = Name,
+                            faces = { {
+                                name = "Regular",
+                                weight = Weight,
+                                style = Style,
+                                assetId = getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".ttf")
+                            } }
+                        }
+                        writefile(Library.Folders.Assets .. "/" .. Name .. ".json", HttpService:JSONEncode(FontData))
+                    end
+                end)
+                -- Возвращаем nil — будет использован fallback
+                return nil
             end
 
             local FontData = {
@@ -775,7 +801,8 @@ local Library do
             Url = "https://github.com/sametexe001/luas/raw/refs/heads/main/fonts/Monaco.ttf"
         })
 
-        Library.Font = CustomFont:Get("Monaco")
+        -- Используем Monaco если уже скачан, иначе системный шрифт
+        Library.Font = CustomFont:Get("Monaco") or Font.new("rbxasset://fonts/families/RobotoMono.json")
     end
 
     Library.Holder = Instances:Create("ScreenGui", {
@@ -953,45 +980,64 @@ local Library do
 	end
 
     Library.GetConfig = function(self)
-        local Config = { } 
+        local Config = {}
 
-        local Success, Result = Library:SafeCall(function()
-            for Index, Value in Library.Flags do 
+        for Index, Value in Library.Flags do
+            pcall(function()
                 if type(Value) == "table" and Value.Key then
-                    Config[Index] = {Key = tostring(Value.Key), Mode = Value.Mode}
+                    Config[Index] = { Key = tostring(Value.Key), Mode = Value.Mode }
                 elseif type(Value) == "table" and Value.Color then
-                    Config[Index] = {Color = "#" .. Value.Color, Alpha = Value.Alpha}
+                    Config[Index] = { Color = "#" .. Value.Color, Alpha = Value.Alpha }
                 else
                     Config[Index] = Value
                 end
-            end
-        end)
+            end)
+        end
 
         return HttpService:JSONEncode(Config)
     end
 
     Library.LoadConfig = function(self, Config)
-        local Decoded = HttpService:JSONDecode(Config)
+        local ok, Decoded = pcall(HttpService.JSONDecode, HttpService, Config)
+        if not ok or type(Decoded) ~= "table" then
+            return false, "Invalid JSON: " .. tostring(Decoded)
+        end
 
-        local Success, Result = Library:SafeCall(function()
-            for Index, Value in Decoded do 
+        -- Загружаем асинхронно батчами чтобы не фризить UI
+        local Success = true
+        local Result  = nil
+
+        task.spawn(function()
+            local batch = 0
+            for Index, Value in Decoded do
                 local SetFunction = Library.SetFlags[Index]
+                if not SetFunction then continue end
 
-                if not SetFunction then
-                    continue
+                local ok2, err = pcall(function()
+                    if type(Value) == "table" and Value.Key then
+                        SetFunction(Value)
+                    elseif type(Value) == "table" and Value.Color then
+                        SetFunction(Value.Color, Value.Alpha)
+                    else
+                        SetFunction(Value)
+                    end
+                end)
+
+                if not ok2 then
+                    Success = false
+                    Result  = err
                 end
 
-                if type(Value) == "table" and Value.Key then 
-                    SetFunction(Value)
-                elseif type(Value) == "table" and Value.Color then
-                    SetFunction(Value.Color, Value.Alpha)
-                else
-                    SetFunction(Value)
+                -- Каждые 20 флагов даём фрейм чтобы UI не фризил
+                batch = batch + 1
+                if batch >= 20 then
+                    batch = 0
+                    task.wait()
                 end
             end
         end)
 
-        return Success, Result
+        return true, nil
     end
 
     Library.DeleteConfig = function(self, Config)
