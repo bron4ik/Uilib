@@ -1042,7 +1042,7 @@ local function CreateMenu(options)
         -- ============================================================
         -- МОДУЛЬ КОНФИГУРАЦИЙ (Путь: Celestial/Configs)
         -- ============================================================
-        library:CreateModule(settingsPage, "Configuration", "Управление сохранениями", function(section)
+        CreateModule(settingsPage, "Configuration", "Управление сохранениями", function(section)
             
             -- Главный путь к папке с конфигами
             local baseFolder = "Celestial"
