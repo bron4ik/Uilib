@@ -1,23 +1,12 @@
 -- ============================================================
--- CELESTIAL UI LIBRARY (с интегрированным HUD) – FULL FIXED
--- ============================================================
--- Использование:
--- local lib = loadstring(game:HttpGet("..."))({ showLoader = true })
--- local combat = lib.AddTab("Combat", "rbxassetid://...")
--- lib.AddToggle(combat, { ... })
--- 
--- Методы HUD:
--- lib.hud.setTarget(player) – сменить цель
--- lib.hud.toggleWatermark(state), toggleTarget(state), toggleKeybinds(state)
--- lib.hud.updateTheme() – обновить цвета по текущей теме
--- lib.hud.getWatermark(), getTarget(), getKeybinds() – возвращают фреймы
--- Флаги: HUD_Watermark, HUD_Target, HUD_Keybinds (доступны через lib.flags)
+-- CELESTIAL UI LIBRARY (ЧАСТЬ 1: ЯДРО И НАСТРОЙКИ)
 -- ============================================================
 
 local function CreateMenu(options)
     options = options or {}
     local showLoader = (options.showLoader ~= false)
 
+    -- Сервисы
     local UIS = game:GetService("UserInputService")
     local TS = game:GetService("TweenService")
     local CoreGui = game:GetService("CoreGui")
@@ -27,7 +16,7 @@ local function CreateMenu(options)
     local Players = game:GetService("Players")
     local player = Players.LocalPlayer
 
-    -- Вспомогательные функции для загрузки картинок
+    -- Вспомогательные функции для картинок
     local function GetLoaderImg(name, url)
         local path = "Celestial/pngs/" .. name
         if not isfolder("Celestial") then makefolder("Celestial") end
@@ -56,8 +45,8 @@ local function CreateMenu(options)
         flags = {},
         theme = { G1 = Color3.fromRGB(180, 40, 40), G2 = Color3.fromRGB(40, 80, 200) },
         _menuOpen = false,
-        _connections = {}, -- для хранения подключений (для Unload)
-        hud = {}
+        _connections = {},
+        hud = {}  -- здесь будут методы управления HUD
     }
 
     -- Переменные GUI (меню)
@@ -67,7 +56,7 @@ local function CreateMenu(options)
     local BindBtnRef = nil
 
     -- ============================================================
-    -- УВЕДОМЛЕНИЯ
+    -- 1. УВЕДОМЛЕНИЯ
     -- ============================================================
     local function CreateNotify(title, text, duration)
         title = title or "Celestial"
@@ -138,7 +127,7 @@ local function CreateMenu(options)
     end
 
     -- ============================================================
-    -- ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
+    -- 2. ЭЛЕМЕНТЫ УПРАВЛЕНИЯ (Toggle, Slider, ColorPicker, Dropdown)
     -- ============================================================
     local function AddToggle(parent, config)
         local state = config.default or false
@@ -452,7 +441,7 @@ local function CreateMenu(options)
     end
 
     -- ============================================================
-    -- МОДУЛЬ (карточка с переключателем)
+    -- 3. МОДУЛЬ (карточка с переключателем)
     -- ============================================================
     local function CreateModule(parent, title, desc, setupFunc, mainCallback)
         local Mod = Instance.new("TextButton", parent)
@@ -578,7 +567,7 @@ local function CreateMenu(options)
     end
 
     -- ============================================================
-    -- ВКЛАДКИ
+    -- 4. ВКЛАДКИ (AddTab)
     -- ============================================================
     local function AddTab(name, iconId, isBottom)
         local parent = isBottom and BottomList or BtnList
@@ -638,156 +627,7 @@ local function CreateMenu(options)
     end
 
     -- ============================================================
-    -- СИСТЕМНАЯ ВКЛАДКА "SETTINGS" (базовая)
-    -- ============================================================
-    local function AddSettingsTab()
-        local settingsPage = AddTab("Settings", "rbxassetid://10734950309")
-        if Pages["Settings"] then
-            Pages["Settings"].Btn.Visible = false
-        end
-
-        local SLayout = Instance.new("UIListLayout", settingsPage)
-        SLayout.Padding = UDim.new(0, 10)
-        SLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        SLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-        AddToggle(settingsPage, {
-            text = "Background Blur",
-            flag = "MenuBlur",
-            default = false,
-            callback = function(v)
-                local Lighting = game:GetService("Lighting")
-                local B = Lighting:FindFirstChild("MenuBlur") or Instance.new("BlurEffect", Lighting)
-                B.Name = "MenuBlur"
-                if v then
-                    B.Enabled = true
-                    TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = 18 }):Play()
-                else
-                    local CloseTween = TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { Size = 0 })
-                    CloseTween:Play()
-                    CloseTween.Completed:Connect(function()
-                        if not library.flags["MenuBlur"] then B.Enabled = false end
-                    end)
-                end
-            end
-        })
-
-        CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
-            section:AddDropdown({
-                text = "Character",
-                flag = "WaifuSelection",
-                options = { "None", "Mellstroy" },
-                default = "None",
-                callback = function(val)
-                    if val == "Mellstroy" and library.flags["Menu Waifu"] then
-                        WaifuImg.Image = GetMellstroy("mellstroy.png", "https://raw.githubusercontent.com/bron4ik/Uilib/main/mellstroy.png")
-                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
-                    else
-                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
-                    end
-                end
-            })
-        end)
-
-        local BindBtn = Instance.new("TextButton", settingsPage)
-        BindBtn.Size = UDim2.new(1, -10, 0, 30)
-        BindBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-        BindBtn.Text = "Menu Bind: " .. MenuKey.Name:upper()
-        BindBtn.TextColor3 = library.theme.G1
-        BindBtn.Font = Enum.Font.GothamBold
-        BindBtn.TextSize = 13
-        Instance.new("UICorner", BindBtn)
-
-        BindBtnRef = BindBtn
-        table.insert(ActiveGradients, { Object = BindBtn, Type = "Slider" })
-
-        local isBinding = false
-        BindBtn.MouseButton1Click:Connect(function()
-            isBinding = true
-            BindBtn.Text = "..."
-        end)
-
-        UIS.InputBegan:Connect(function(i, g)
-            if g then return end
-            if isBinding then
-                MenuKey = i.KeyCode
-                BindBtn.Text = "Menu Bind: " .. i.KeyCode.Name:upper()
-                BindBtn.TextColor3 = library.theme.G1
-                isBinding = false
-                return
-            end
-            if i.KeyCode == MenuKey then
-                ToggleMenu()
-            end
-        end)
-
-        return settingsPage
-    end
-
-    -- ============================================================
-    -- СИСТЕМНАЯ ВКЛАДКА "THEMES"
-    -- ============================================================
-    local function AddThemesTab()
-        local themesPage = AddTab("Themes", "rbxassetid://78489916461314", true)
-
-        local ThemeGrid = themesPage:WaitForChild("UIGridLayout")
-        ThemeGrid.CellSize = UDim2.new(0, 100, 0, 40)
-        ThemeGrid.CellPadding = UDim2.new(0, 10, 0, 10)
-        ThemeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-        local AvailableThemes = {
-            ["Celestial"] = { G1 = Color3.fromRGB(180, 40, 40), G2 = Color3.fromRGB(40, 80, 200) },
-            ["Vape"] = { G1 = Color3.fromRGB(0, 255, 200), G2 = Color3.fromRGB(0, 150, 255) },
-            ["Emerald"] = { G1 = Color3.fromRGB(40, 200, 80), G2 = Color3.fromRGB(20, 100, 40) },
-            ["Amethyst"] = { G1 = Color3.fromRGB(150, 50, 250), G2 = Color3.fromRGB(70, 20, 150) },
-            ["Sunrise"] = { G1 = Color3.fromRGB(255, 150, 50), G2 = Color3.fromRGB(200, 50, 50) }
-        }
-
-        for name, colors in pairs(AvailableThemes) do
-            local TBtn = Instance.new("TextButton", themesPage)
-            TBtn.Name = name
-            TBtn.Text = name:upper()
-            TBtn.TextColor3 = Color3.new(1, 1, 1)
-            TBtn.Font = Enum.Font.GothamBold
-            TBtn.TextSize = 10
-            TBtn.BackgroundColor3 = Color3.new(1, 1, 1)
-            TBtn.AutoButtonColor = false
-            Instance.new("UICorner", TBtn).CornerRadius = UDim.new(0, 6)
-            local Grad = Instance.new("UIGradient", TBtn)
-            Grad.Color = ColorSequence.new(colors.G1, colors.G2)
-            Grad.Rotation = 45
-
-            TBtn.MouseButton1Click:Connect(function()
-                library.theme = colors
-                for _, data in pairs(ActiveGradients) do
-                    if typeof(data) == "Instance" then
-                        data.Color = ColorSequence.new(colors.G1, colors.G2)
-                    elseif type(data) == "table" then
-                        if data.Type == "Toggle" then
-                            if library.flags[data.Flag] then
-                                TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
-                            end
-                        elseif data.Type == "Slider" then
-                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
-                        end
-                    end
-                end
-                if BindBtnRef then
-                    BindBtnRef.TextColor3 = colors.G1
-                end
-                -- Обновляем HUD
-                if library.hud.updateTheme then
-                    library.hud.updateTheme()
-                end
-                CreateNotify("Celestial", "Тема [" .. name .. "] применена мгновенно!", 2)
-            end)
-        end
-
-        return themesPage
-    end
-
-    -- ============================================================
-    -- ПОСТРОЕНИЕ ГЛАВНОГО МЕНЮ
+    -- 5. ПОСТРОЕНИЕ ГЛАВНОГО МЕНЮ (BuildMenu)
     -- ============================================================
     local function BuildMenu()
         local MenuName = "Celestial"
@@ -952,6 +792,7 @@ local function CreateMenu(options)
             end
         end
 
+        -- Возвращаем методы для библиотеки
         return {
             AddTab = AddTab,
             AddToggle = AddToggle,
@@ -973,6 +814,7 @@ local function CreateMenu(options)
             GetTheme = function() return library.theme end,
             SetTheme = function(colors)
                 library.theme = colors
+                -- Обновление всех градиентов в меню
                 for _, data in pairs(ActiveGradients) do
                     if typeof(data) == "Instance" then
                         data.Color = ColorSequence.new(colors.G1, colors.G2)
@@ -987,34 +829,28 @@ local function CreateMenu(options)
                 if BindBtnRef then
                     BindBtnRef.TextColor3 = colors.G1
                 end
-                if library.hud.updateTheme then
+                -- Обновляем HUD, если доступно
+                if library.hud and library.hud.updateTheme then
                     library.hud.updateTheme()
                 end
                 CreateNotify("Celestial", "Тема обновлена", 1)
             end,
             Notify = CreateNotify,
             Unload = function()
-                -- Отключаем все подключения
                 for _, conn in ipairs(library._connections) do
                     pcall(function() conn:Disconnect() end)
                 end
                 library._connections = {}
-                -- Удаляем HUD ScreenGui
                 local hudGui = CoreGui:FindFirstChild("CelestialHUD")
                 if hudGui then hudGui:Destroy() end
-                -- Удаляем главное меню
                 if ScreenGui then ScreenGui:Destroy() end
-                -- Удаляем Waifu
                 if WaifuGui then WaifuGui:Destroy() end
-                -- Удаляем нотификации
                 local notifGui = CoreGui:FindFirstChild("CelestialNotifs")
                 if notifGui then notifGui:Destroy() end
-                -- Сбрасываем флаги
                 for flag, _ in pairs(library.flags) do
                     library.flags[flag] = false
                 end
                 library._menuOpen = false
-                -- Очищаем ссылки
                 library.hud = nil
                 print("[Celestial] Unload completed.")
             end
@@ -1022,417 +858,100 @@ local function CreateMenu(options)
     end
 
     -- ============================================================
-    -- ИНТЕГРАЦИЯ HUD (исправленная и завершённая)
+    -- 6. ВКЛАДКА НАСТРОЕК (AddSettingsTab) с тогглами HUD
     -- ============================================================
-    local function setupHUD()
-        for _, name in ipairs({"CelestialHUD", "CelestialWatermarkGui", "CelestialTargetHudGui", "CelestialKeybindsGui"}) do
-            if CoreGui:FindFirstChild(name) then CoreGui[name]:Destroy() end
+    local function AddSettingsTab()
+        local settingsPage = AddTab("Settings", "rbxassetid://10734950309")
+        if Pages["Settings"] then
+            Pages["Settings"].Btn.Visible = false
         end
 
-        local hudScreenGui = Instance.new("ScreenGui")
-        hudScreenGui.Name = "CelestialHUD"
-        hudScreenGui.IgnoreGuiInset = true
-        hudScreenGui.ResetOnSpawn = false
-        hudScreenGui.DisplayOrder = 99999999
-        hudScreenGui.Parent = CoreGui
-        table.insert(library._connections, hudScreenGui.Destroying) -- не совсем корректно, но для очистки
+        local SLayout = Instance.new("UIListLayout", settingsPage)
+        SLayout.Padding = UDim.new(0, 10)
+        SLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        SLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-        local function CreateDraggableFrame(name, size, position, bgColor)
-            local frame = Instance.new("Frame")
-            frame.Name = name
-            frame.Size = size
-            frame.Position = position
-            frame.BackgroundColor3 = bgColor
-            frame.BorderSizePixel = 0
-            frame.Active = true
-            frame.ZIndex = 5
-            frame.ClipsDescendants = true
-            frame.Parent = hudScreenGui
-
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(0, 6)
-            corner.Parent = frame
-
-            local dragging, dragInput, dragStart, startPos
-            local function registerDrag(object)
-                object.InputBegan:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                        dragging = true
-                        dragStart = input.Position
-                        startPos = frame.Position
-                        input.Changed:Connect(function()
-                            if input.UserInputState == Enum.UserInputState.End then
-                                dragging = false
-                            end
-                        end)
-                    end
-                end)
-                object.InputChanged:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                        dragInput = input
-                    end
-                end)
-            end
-            registerDrag(frame)
-
-            UIS.InputChanged:Connect(function(input)
-                if input == dragInput and dragging then
-                    local delta = input.Position - dragStart
-                    frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-                end
-            end)
-
-            return frame, registerDrag
-        end
-
-        local function AddStrokeAndGlow(frame)
-            local stroke = Instance.new("UIStroke")
-            stroke.Color = library.theme.G1
-            stroke.Thickness = 1.5
-            stroke.Parent = frame
-
-            local glow = Instance.new("ImageLabel")
-            glow.Name = "GlowShadow"
-            glow.Position = UDim2.new(0, -15, 0, -15)
-            glow.Size = UDim2.new(1, 30, 1, 30)
-            glow.BackgroundTransparency = 1
-            glow.Image = "rbxassetid://12974304856"
-            glow.ImageColor3 = library.theme.G1
-            glow.ImageTransparency = 0.4
-            glow.ScaleType = Enum.ScaleType.Slice
-            glow.SliceCenter = Rect.new(20, 20, 100, 100)
-            glow.ZIndex = 1
-            glow.Parent = frame
-
-            return stroke, glow
-        end
-
-        -- ===== 1. WATERMARK =====
-        local wmFrame, _ = CreateDraggableFrame("Watermark", UDim2.new(0, 100, 0, 32), UDim2.new(0, 20, 0, 20), Color3.fromRGB(10, 10, 12))
-        local wmStroke, wmGlow = AddStrokeAndGlow(wmFrame)
-
-        local wmText = Instance.new("TextLabel")
-        wmText.AutomaticSize = Enum.AutomaticSize.XY
-        wmText.BackgroundTransparency = 1
-        wmText.Font = Enum.Font.FredokaOne
-        wmText.TextSize = 14
-        wmText.TextColor3 = Color3.fromRGB(255, 255, 255)
-        wmText.ZIndex = 6
-        wmText.Parent = wmFrame
-
-        local pad = Instance.new("UIPadding")
-        pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-        pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 14), UDim.new(0, 14)
-        pad.Parent = wmFrame
-
-        local fpsCount, lastUpdate, targetWidth = 0, os.clock(), 100
-        local wmConnection = RunService.RenderStepped:Connect(function()
-            if not library.flags.HUD_Watermark then
-                wmFrame.Visible = false
-                return
-            else
-                wmFrame.Visible = true
-            end
-            fpsCount = fpsCount + 1
-            local now = os.clock()
-            if now - lastUpdate >= 0.3 then
-                local currentFps = math.floor(fpsCount / (now - lastUpdate))
-                local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-                wmText.Text = string.format("%s  »  Dev  »  Fps: %d  »  %dms", player.Name, currentFps, ping)
-                fpsCount, lastUpdate = 0, now
-                task.wait()
-                targetWidth = wmText.AbsoluteSize.X + 28
-            end
-            local curW = wmFrame.Size.X.Offset
-            if math.abs(curW - targetWidth) > 1 then
-                wmFrame.Size = UDim2.new(0, curW + (targetWidth - curW) * 0.1, 0, 32)
-            else
-                wmFrame.Size = UDim2.new(0, targetWidth, 0, 32)
-            end
-        end)
-        table.insert(library._connections, wmConnection)
-
-        -- ===== 2. TARGET HUD =====
-        local targetFrame, _ = CreateDraggableFrame("Target", UDim2.new(0, 220, 0, 68), UDim2.new(0.5, -110, 0.6, 0), Color3.fromRGB(10, 10, 12))
-        local targetStroke, targetGlow = AddStrokeAndGlow(targetFrame)
-
-        local avatar = Instance.new("ImageLabel")
-        avatar.Size = UDim2.new(0, 48, 0, 48)
-        avatar.Position = UDim2.new(0, 10, 0, 10)
-        avatar.BackgroundTransparency = 1
-        avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150"
-        avatar.ZIndex = 6
-        avatar.Parent = targetFrame
-        Instance.new("UICorner", avatar).CornerRadius = UDim.new(0, 6)
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -80, 0, 18)
-        nameLabel.Position = UDim2.new(0, 68, 0, 10)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Font = Enum.Font.FredokaOne
-        nameLabel.TextSize = 14
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.Text = player.Name
-        nameLabel.ZIndex = 6
-        nameLabel.Parent = targetFrame
-
-        local hpLabel = Instance.new("TextLabel")
-        hpLabel.Size = UDim2.new(1, -80, 0, 14)
-        hpLabel.Position = UDim2.new(0, 68, 0, 26)
-        hpLabel.BackgroundTransparency = 1
-        hpLabel.Font = Enum.Font.FredokaOne
-        hpLabel.TextSize = 11
-        hpLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
-        hpLabel.TextXAlignment = Enum.TextXAlignment.Left
-        hpLabel.ZIndex = 6
-        hpLabel.Parent = targetFrame
-
-        local hpBar = Instance.new("Frame")
-        hpBar.Size = UDim2.new(1, -78, 0, 12)
-        hpBar.Position = UDim2.new(0, 68, 0, 44)
-        hpBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-        hpBar.ZIndex = 6
-        hpBar.Parent = targetFrame
-        Instance.new("UICorner", hpBar).CornerRadius = UDim.new(0, 4)
-
-        local hpFill = Instance.new("Frame")
-        hpFill.Size = UDim2.new(1, 0, 1, 0)
-        hpFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        hpFill.ZIndex = 7
-        hpFill.Parent = hpBar
-        Instance.new("UICorner", hpFill).CornerRadius = UDim.new(0, 4)
-
-        local grad = Instance.new("UIGradient")
-        grad.Color = ColorSequence.new(Color3.fromRGB(152, 69, 235), Color3.fromRGB(235, 78, 149))
-        grad.Parent = hpFill
-
-        local targetPlayer = player
-        local function updateTarget(playerObj)
-            targetPlayer = playerObj or player
-            nameLabel.Text = targetPlayer.Name
-            task.spawn(function()
-                local success, thumb = pcall(function()
-                    return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-                end)
-                if success and thumb then
-                    avatar.Image = thumb
+        AddToggle(settingsPage, {
+            text = "Background Blur",
+            flag = "MenuBlur",
+            default = false,
+            callback = function(v)
+                local Lighting = game:GetService("Lighting")
+                local B = Lighting:FindFirstChild("MenuBlur") or Instance.new("BlurEffect", Lighting)
+                B.Name = "MenuBlur"
+                if v then
+                    B.Enabled = true
+                    TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = 18 }):Play()
                 else
-                    avatar.Image = "rbxassetid://11189547379"
+                    local CloseTween = TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { Size = 0 })
+                    CloseTween:Play()
+                    CloseTween.Completed:Connect(function()
+                        if not library.flags["MenuBlur"] then B.Enabled = false end
+                    end)
                 end
-            end)
-        end
-
-        local hpConnection = RunService.RenderStepped:Connect(function()
-            if not library.flags.HUD_Target then
-                targetFrame.Visible = false
-                return
-            else
-                targetFrame.Visible = true
             end
-            local char = targetPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health and hum.MaxHealth > 0 then
-                local hp = hum.Health
-                local maxHp = hum.MaxHealth
-                hpLabel.Text = "HP: " .. string.format("%.1f", hp)
-                TS:Create(hpFill, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(math.clamp(hp / maxHp, 0, 1), 0, 1, 0)
-                }):Play()
-            else
-                hpLabel.Text = "HP: 0.0"
-                hpFill.Size = UDim2.new(0, 0, 1, 0)
-            end
-        end)
-        table.insert(library._connections, hpConnection)
-
-        -- ===== 3. KEYBINDS =====
-        local kbFrame, registerKbDrag = CreateDraggableFrame("Keybinds", UDim2.new(0, 165, 0, 42), UDim2.new(0, 20, 0, 100), Color3.fromRGB(10, 10, 12))
-        local kbStroke, kbGlow = AddStrokeAndGlow(kbFrame)
-
-        local header = Instance.new("Frame")
-        header.Size = UDim2.new(1, 0, 0, 36)
-        header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)  -- ПРАВИЛО ГРАДИЕНТА
-        header.BorderSizePixel = 0
-        header.ZIndex = 6
-        header.Parent = kbFrame
-        registerKbDrag(header)
-
-        local headerCorner = Instance.new("UICorner")
-        headerCorner.CornerRadius = UDim.new(0, 6)
-        headerCorner.Parent = header
-
-        local headerGrad = Instance.new("UIGradient")
-        headerGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 35, 190)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 45, 120))
         })
-        headerGrad.Parent = header
 
-        local title = Instance.new("TextLabel")
-        title.Size = UDim2.new(1, 0, 1, 0)
-        title.BackgroundTransparency = 1
-        title.Font = Enum.Font.FredokaOne
-        title.TextSize = 14
-        title.TextColor3 = Color3.fromRGB(220, 220, 220)
-        title.Text = "Keybinds"
-        title.ZIndex = 8
-        title.Parent = header
-
-        local listContainer = Instance.new("Frame")
-        listContainer.Size = UDim2.new(1, 0, 1, -36)
-        listContainer.Position = UDim2.new(0, 0, 0, 36)
-        listContainer.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
-        listContainer.BorderSizePixel = 0
-        listContainer.ClipsDescendants = true
-        listContainer.ZIndex = 6
-        listContainer.Parent = kbFrame
-        local listCorner = Instance.new("UICorner")
-        listCorner.CornerRadius = UDim.new(0, 6)
-        listCorner.Parent = listContainer
-
-        local listLayout = Instance.new("UIListLayout")
-        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        listLayout.Padding = UDim.new(0, 5)
-        listLayout.Parent = listContainer
-
-        local listPad = Instance.new("UIPadding")
-        listPad.PaddingTop = UDim.new(0, 12)
-        listPad.PaddingBottom = UDim.new(0, 12)
-        listPad.PaddingLeft = UDim.new(0, 14)
-        listPad.PaddingRight = UDim.new(0, 14)
-        listPad.Parent = listContainer
-
-        local modules = {
-            G = {Name = "Fly", Active = false, Element = nil},
-            H = {Name = "KillAura", Active = false, Element = nil},
-            J = {Name = "Speed", Active = false, Element = nil}
-        }
-        local activeOrder = {}
-
-        local function updateKeybindsLayout()
-            local count = #activeOrder
-            local targetHeight = 42
-            if count > 0 then
-                targetHeight = 42 + (count * 22) + ((count - 1) * 5) + 24
-            end
-            if library.flags.HUD_Keybinds then
-                TS:Create(kbFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, 165, 0, targetHeight)
-                }):Play()
-                kbFrame.Visible = true
-            else
-                kbFrame.Visible = false
-            end
-        end
-
-        local function createBindLabel(name, key, order)
-            local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, 0, 0, 22)
-            lbl.BackgroundTransparency = 1
-            lbl.Font = Enum.Font.FredokaOne
-            lbl.TextSize = 13
-            lbl.TextColor3 = Color3.fromRGB(240, 240, 240)
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-            lbl.Text = string.format("%s [%s]", name, key)
-            lbl.LayoutOrder = order
-            lbl.ZIndex = 7
-            lbl.Parent = listContainer
-            return lbl
-        end
-
-        local function toggleModule(key)
-            local mod = modules[key]
-            if not mod then return end
-            mod.Active = not mod.Active
-            if mod.Active then
-                table.insert(activeOrder, mod)
-                mod.Element = createBindLabel(mod.Name, key, #activeOrder)
-            else
-                for i, m in ipairs(activeOrder) do
-                    if m == mod then
-                        table.remove(activeOrder, i)
-                        break
+        CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
+            section:AddDropdown({
+                text = "Character",
+                flag = "WaifuSelection",
+                options = { "None", "Mellstroy" },
+                default = "None",
+                callback = function(val)
+                    if val == "Mellstroy" and library.flags["Menu Waifu"] then
+                        WaifuImg.Image = GetMellstroy("mellstroy.png", "https://raw.githubusercontent.com/bron4ik/Uilib/main/mellstroy.png")
+                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
+                    else
+                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
                     end
                 end
-                if mod.Element then mod.Element:Destroy(); mod.Element = nil end
-                for i, m in ipairs(activeOrder) do
-                    if m.Element then m.Element.LayoutOrder = i end
-                end
-            end
-            updateKeybindsLayout()
-        end
+            })
+        end)
 
-        local kbConnection = UIS.InputBegan:Connect(function(input, processed)
-            if processed then return end
-            local keyStr = input.KeyCode.Name
-            if modules[keyStr] then
-                toggleModule(keyStr)
+        -- Бинд для открытия меню
+        local BindBtn = Instance.new("TextButton", settingsPage)
+        BindBtn.Size = UDim2.new(1, -10, 0, 30)
+        BindBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        BindBtn.Text = "Menu Bind: " .. MenuKey.Name:upper()
+        BindBtn.TextColor3 = library.theme.G1
+        BindBtn.Font = Enum.Font.GothamBold
+        BindBtn.TextSize = 13
+        Instance.new("UICorner", BindBtn)
+
+        BindBtnRef = BindBtn
+        table.insert(ActiveGradients, { Object = BindBtn, Type = "Slider" })
+
+        local isBinding = false
+        BindBtn.MouseButton1Click:Connect(function()
+            isBinding = true
+            BindBtn.Text = "..."
+        end)
+
+        UIS.InputBegan:Connect(function(i, g)
+            if g then return end
+            if isBinding then
+                MenuKey = i.KeyCode
+                BindBtn.Text = "Menu Bind: " .. i.KeyCode.Name:upper()
+                BindBtn.TextColor3 = library.theme.G1
+                isBinding = false
+                return
+            end
+            if i.KeyCode == MenuKey then
+                ToggleMenu()
             end
         end)
-        table.insert(library._connections, kbConnection)
 
-        local function updateKeybindsVisibility()
-            updateKeybindsLayout()
-        end
-
-        -- Экспортируем методы HUD
-        library.hud = {
-            setTarget = function(playerObj)
-                if not playerObj or not playerObj:IsA("Player") then return end
-                updateTarget(playerObj)
-            end,
-            toggleWatermark = function(state)
-                library.flags.HUD_Watermark = (state ~= nil and state) or not library.flags.HUD_Watermark
-                wmFrame.Visible = library.flags.HUD_Watermark
-            end,
-            toggleTarget = function(state)
-                library.flags.HUD_Target = (state ~= nil and state) or not library.flags.HUD_Target
-                targetFrame.Visible = library.flags.HUD_Target
-            end,
-            toggleKeybinds = function(state)
-                library.flags.HUD_Keybinds = (state ~= nil and state) or not library.flags.HUD_Keybinds
-                updateKeybindsVisibility()
-            end,
-            updateTheme = function()
-                local color = library.theme.G1
-                for _, frame in ipairs({wmFrame, targetFrame, kbFrame}) do
-                    local stroke = frame:FindFirstChildWhichIsA("UIStroke")
-                    if stroke then stroke.Color = color end
-                    local glow = frame:FindFirstChild("GlowShadow")
-                    if glow then glow.ImageColor3 = color end
-                end
-            end,
-            getWatermark = function() return wmFrame end,
-            getTarget = function() return targetFrame end,
-            getKeybinds = function() return kbFrame end,
-        }
-
-        library.flags.HUD_Watermark = true
-        library.flags.HUD_Target = true
-        library.flags.HUD_Keybinds = true
-
-        wmFrame.Visible = true
-        targetFrame.Visible = true
-        updateKeybindsVisibility()
-
-        -- Сохраняем ссылки для очистки
-        library._hudScreenGui = hudScreenGui
-    end
-
-    -- ============================================================
-    -- РАСШИРЯЕМ AddSettingsTab ДОБАВЛЕНИЕМ МОДУЛЯ HUD
-    -- ============================================================
-    local originalAddSettingsTab = AddSettingsTab
-    function AddSettingsTab()
-        local settingsPage = originalAddSettingsTab()
+        -- ДОБАВЛЯЕМ МОДУЛЬ HUD ELEMENTS С ТОГГЛАМИ
         CreateModule(settingsPage, "HUD Elements", "Управление интерфейсом", function(section)
             section:AddToggle({
                 text = "Показывать Watermark",
                 flag = "HUD_Watermark",
                 default = true,
                 callback = function(v)
-                    library.hud.toggleWatermark(v)
+                    if library.hud and library.hud.toggleWatermark then
+                        library.hud.toggleWatermark(v)
+                    end
                 end
             })
             section:AddToggle({
@@ -1440,7 +959,9 @@ local function CreateMenu(options)
                 flag = "HUD_Target",
                 default = true,
                 callback = function(v)
-                    library.hud.toggleTarget(v)
+                    if library.hud and library.hud.toggleTarget then
+                        library.hud.toggleTarget(v)
+                    end
                 end
             })
             section:AddToggle({
@@ -1448,7 +969,9 @@ local function CreateMenu(options)
                 flag = "HUD_Keybinds",
                 default = true,
                 callback = function(v)
-                    library.hud.toggleKeybinds(v)
+                    if library.hud and library.hud.toggleKeybinds then
+                        library.hud.toggleKeybinds(v)
+                    end
                 end
             })
             section:AddDropdown({
@@ -1458,7 +981,9 @@ local function CreateMenu(options)
                 default = "Локальный игрок",
                 callback = function(val)
                     if val == "Локальный игрок" then
-                        library.hud.setTarget(player)
+                        if library.hud and library.hud.setTarget then
+                            library.hud.setTarget(player)
+                        end
                     elseif val == "Ближайший игрок" then
                         local closest, minDist = nil, math.huge
                         for _, plr in ipairs(Players:GetPlayers()) do
@@ -1470,7 +995,9 @@ local function CreateMenu(options)
                                 end
                             end
                         end
-                        library.hud.setTarget(closest or player)
+                        if library.hud and library.hud.setTarget then
+                            library.hud.setTarget(closest or player)
+                        end
                     elseif val == "Первый в списке" then
                         local first = nil
                         for _, plr in ipairs(Players:GetPlayers()) do
@@ -1479,16 +1006,93 @@ local function CreateMenu(options)
                                 break
                             end
                         end
-                        library.hud.setTarget(first or player)
+                        if library.hud and library.hud.setTarget then
+                            library.hud.setTarget(first or player)
+                        end
                     end
                 end
             })
         end)
+
         return settingsPage
     end
 
     -- ============================================================
-    -- ЗАГРУЗЧИК
+    -- 7. ВКЛАДКА ТЕМ (Themes)
+    -- ============================================================
+    local function AddThemesTab()
+        local themesPage = AddTab("Themes", "rbxassetid://78489916461314", true)
+
+        local ThemeGrid = themesPage:WaitForChild("UIGridLayout")
+        ThemeGrid.CellSize = UDim2.new(0, 100, 0, 40)
+        ThemeGrid.CellPadding = UDim2.new(0, 10, 0, 10)
+        ThemeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        local AvailableThemes = {
+            ["Celestial"] = { G1 = Color3.fromRGB(180, 40, 40), G2 = Color3.fromRGB(40, 80, 200) },
+            ["Vape"] = { G1 = Color3.fromRGB(0, 255, 200), G2 = Color3.fromRGB(0, 150, 255) },
+            ["Emerald"] = { G1 = Color3.fromRGB(40, 200, 80), G2 = Color3.fromRGB(20, 100, 40) },
+            ["Amethyst"] = { G1 = Color3.fromRGB(150, 50, 250), G2 = Color3.fromRGB(70, 20, 150) },
+            ["Sunrise"] = { G1 = Color3.fromRGB(255, 150, 50), G2 = Color3.fromRGB(200, 50, 50) }
+        }
+
+        for name, colors in pairs(AvailableThemes) do
+            local TBtn = Instance.new("TextButton", themesPage)
+            TBtn.Name = name
+            TBtn.Text = name:upper()
+            TBtn.TextColor3 = Color3.new(1, 1, 1)
+            TBtn.Font = Enum.Font.GothamBold
+            TBtn.TextSize = 10
+            TBtn.BackgroundColor3 = Color3.new(1, 1, 1)
+            TBtn.AutoButtonColor = false
+            Instance.new("UICorner", TBtn).CornerRadius = UDim.new(0, 6)
+            local Grad = Instance.new("UIGradient", TBtn)
+            Grad.Color = ColorSequence.new(colors.G1, colors.G2)
+            Grad.Rotation = 45
+
+            TBtn.MouseButton1Click:Connect(function()
+                library.theme = colors
+                for _, data in pairs(ActiveGradients) do
+                    if typeof(data) == "Instance" then
+                        data.Color = ColorSequence.new(colors.G1, colors.G2)
+                    elseif type(data) == "table" then
+                        if data.Type == "Toggle" and library.flags[data.Flag] then
+                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                        elseif data.Type == "Slider" then
+                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                        end
+                    end
+                end
+                if BindBtnRef then
+                    BindBtnRef.TextColor3 = colors.G1
+                end
+                if library.hud and library.hud.updateTheme then
+                    library.hud.updateTheme()
+                end
+                CreateNotify("Celestial", "Тема [" .. name .. "] применена мгновенно!", 2)
+            end)
+        end
+
+        return themesPage
+    end
+
+    -- ============================================================
+    -- 8. МЕТОДЫ УПРАВЛЕНИЯ HUD (будут вызваны после создания HUD)
+    -- ============================================================
+    -- Здесь мы определяем заглушки для методов HUD, которые будут переопределены в setupHUD
+    library.hud = {
+        setTarget = function() end,
+        toggleWatermark = function() end,
+        toggleTarget = function() end,
+        toggleKeybinds = function() end,
+        updateTheme = function() end,
+        getWatermark = function() return nil end,
+        getTarget = function() return nil end,
+        getKeybinds = function() return nil end,
+    }
+
+    -- ============================================================
+    -- 9. ЗАГРУЗЧИК (Loader)
     -- ============================================================
     local function RunLoader(callback)
         local LoaderGui = Instance.new("ScreenGui", CoreGui)
@@ -1583,28 +1187,544 @@ local function CreateMenu(options)
         callback()
     end
 
-    -- ============================================================
-    -- ЗАПУСК
-    -- ============================================================
-    local function start()
-        local menuMethods = BuildMenu()
-        for k, v in pairs(menuMethods) do
-            library[k] = v
+-- ============================================================
+-- ЧАСТЬ 2: СОЗДАНИЕ HUD-ЭЛЕМЕНТОВ И ИНТЕГРАЦИЯ
+-- ============================================================
+
+-- В этой части мы переопределим library.flags с метатаблицей,
+-- создадим setupHUD, который построит Watermark, Target HUD и Keybinds,
+-- а также свяжем их с тогглами и темой.
+
+-- Начинаем с того, что сохраним ссылку на старую таблицу флагов,
+-- создадим новую с метатаблицей и скопируем старые значения.
+
+-- (Продолжение кода из первой части: мы находимся внутри функции CreateMenu,
+-- после определения AddThemesTab и перед RunLoader)
+
+-- ============================================================
+-- 8. ПЕРЕОПРЕДЕЛЕНИЕ ФЛАГОВ С МЕТАТАБЛИЦЕЙ
+-- ============================================================
+local oldFlags = library.flags
+local flagCallbacks = {}  -- таблица для хранения колбэков на изменение флагов
+
+library.flags = {}
+setmetatable(library.flags, {
+    __index = function(t, k)
+        return oldFlags[k]
+    end,
+    __newindex = function(t, k, v)
+        oldFlags[k] = v
+        -- Вызываем колбэки для этого флага
+        if flagCallbacks[k] then
+            for _, cb in ipairs(flagCallbacks[k]) do
+                pcall(cb, v)
+            end
         end
-        library._menuOpen = false
-
-        setupHUD()
-
-        CreateNotify("Celestial", "Меню и HUD загружены! Нажмите " .. MenuKey.Name:upper() .. " для открытия.", 4)
+        -- Общий колбэк для всех флагов (опционально)
+        if flagCallbacks["*"] then
+            for _, cb in ipairs(flagCallbacks["*"]) do
+                pcall(cb, k, v)
+            end
+        end
     end
+})
 
-    if showLoader then
-        RunLoader(start)
-    else
-        start()
+-- Функция для регистрации колбэка на изменение флага
+local function onFlagChanged(flag, callback)
+    if not flagCallbacks[flag] then
+        flagCallbacks[flag] = {}
     end
-
-    return library
+    table.insert(flagCallbacks[flag], callback)
 end
 
-return CreateMenu
+-- Регистрируем универсальный обработчик для отслеживания биндов
+onFlagChanged("*", function(flag, value)
+    -- Если флаг заканчивается на "_Bind", это бинд
+    if flag:sub(-5) == "_Bind" then
+        local moduleName = flag:sub(1, -6)
+        -- Если модуль активен (есть флаг с таким именем и он true), добавляем бинд
+        if library.flags[moduleName] then
+            if library.hud and library.hud._addBind then
+                local displayName = library.hud._moduleDisplayNames and library.hud._moduleDisplayNames[moduleName] or moduleName
+                library.hud._addBind(moduleName, value, displayName)
+            end
+        else
+            -- Если модуль не активен, удаляем бинд
+            if library.hud and library.hud._removeBind then
+                library.hud._removeBind(moduleName)
+            end
+        end
+    end
+    -- Если флаг относится к модулю (например, "Fly"), проверяем наличие бинда
+    local bindFlag = flag .. "_Bind"
+    if oldFlags[bindFlag] and oldFlags[bindFlag] ~= "NONE" then
+        if value then
+            -- Модуль включился, добавляем бинд
+            if library.hud and library.hud._addBind then
+                local displayName = library.hud._moduleDisplayNames and library.hud._moduleDisplayNames[flag] or flag
+                library.hud._addBind(flag, oldFlags[bindFlag], displayName)
+            end
+        else
+            -- Модуль выключился, удаляем бинд
+            if library.hud and library.hud._removeBind then
+                library.hud._removeBind(flag)
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- 9. setupHUD (создание Watermark, Target HUD, Keybinds)
+-- ============================================================
+local function setupHUD()
+    -- Удаляем старые HUD-гуи
+    for _, name in ipairs({"CelestialHUD", "CelestialWatermarkGui", "CelestialTargetHudGui", "CelestialKeybindsGui"}) do
+        if CoreGui:FindFirstChild(name) then CoreGui[name]:Destroy() end
+    end
+
+    local hudScreenGui = Instance.new("ScreenGui")
+    hudScreenGui.Name = "CelestialHUD"
+    hudScreenGui.IgnoreGuiInset = true
+    hudScreenGui.ResetOnSpawn = false
+    hudScreenGui.DisplayOrder = 99999999
+    hudScreenGui.Parent = CoreGui
+    table.insert(library._connections, hudScreenGui.Destroying)
+
+    -- Вспомогательная функция для создания фрейма с драгом
+    local function CreateDraggableFrame(name, size, position, bgColor)
+        local frame = Instance.new("Frame")
+        frame.Name = name
+        frame.Size = size
+        frame.Position = position
+        frame.BackgroundColor3 = bgColor
+        frame.BorderSizePixel = 0
+        frame.Active = true
+        frame.ZIndex = 5
+        frame.ClipsDescendants = true
+        frame.Parent = hudScreenGui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 6)
+        corner.Parent = frame
+
+        local dragging, dragInput, dragStart, startPos
+        local function registerDrag(object)
+            object.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    dragStart = input.Position
+                    startPos = frame.Position
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            dragging = false
+                        end
+                    end)
+                end
+            end)
+            object.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                    dragInput = input
+                end
+            end)
+        end
+        registerDrag(frame)
+
+        UIS.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+
+        return frame, registerDrag
+    end
+
+    -- Функция для обводки и свечения
+    local function AddStrokeAndGlow(frame)
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = library.theme.G1
+        stroke.Thickness = 1.5
+        stroke.Parent = frame
+
+        local glow = Instance.new("ImageLabel")
+        glow.Name = "GlowShadow"
+        glow.Position = UDim2.new(0, -15, 0, -15)
+        glow.Size = UDim2.new(1, 30, 1, 30)
+        glow.BackgroundTransparency = 1
+        glow.Image = "rbxassetid://12974304856"
+        glow.ImageColor3 = library.theme.G1
+        glow.ImageTransparency = 0.4
+        glow.ScaleType = Enum.ScaleType.Slice
+        glow.SliceCenter = Rect.new(20, 20, 100, 100)
+        glow.ZIndex = 1
+        glow.Parent = frame
+
+        return stroke, glow
+    end
+
+    -- ===== 1. WATERMARK =====
+    local wmFrame, _ = CreateDraggableFrame("Watermark", UDim2.new(0, 100, 0, 32), UDim2.new(0, 20, 0, 20), Color3.fromRGB(10, 10, 12))
+    local wmStroke, wmGlow = AddStrokeAndGlow(wmFrame)
+
+    local wmText = Instance.new("TextLabel")
+    wmText.AutomaticSize = Enum.AutomaticSize.XY
+    wmText.BackgroundTransparency = 1
+    wmText.Font = Enum.Font.FredokaOne
+    wmText.TextSize = 14
+    wmText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    wmText.ZIndex = 6
+    wmText.Parent = wmFrame
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+    pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 14), UDim.new(0, 14)
+    pad.Parent = wmFrame
+
+    local fpsCount, lastUpdate, targetWidth = 0, os.clock(), 100
+    local wmConnection = RunService.RenderStepped:Connect(function()
+        if not library.flags.HUD_Watermark then
+            wmFrame.Visible = false
+            return
+        else
+            wmFrame.Visible = true
+        end
+        fpsCount = fpsCount + 1
+        local now = os.clock()
+        if now - lastUpdate >= 0.3 then
+            local currentFps = math.floor(fpsCount / (now - lastUpdate))
+            local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+            wmText.Text = string.format("%s  »  Dev  »  Fps: %d  »  %dms", player.Name, currentFps, ping)
+            fpsCount, lastUpdate = 0, now
+            task.wait()
+            targetWidth = wmText.AbsoluteSize.X + 28
+        end
+        local curW = wmFrame.Size.X.Offset
+        if math.abs(curW - targetWidth) > 1 then
+            wmFrame.Size = UDim2.new(0, curW + (targetWidth - curW) * 0.1, 0, 32)
+        else
+            wmFrame.Size = UDim2.new(0, targetWidth, 0, 32)
+        end
+    end)
+    table.insert(library._connections, wmConnection)
+
+    -- ===== 2. TARGET HUD =====
+    local targetFrame, _ = CreateDraggableFrame("Target", UDim2.new(0, 220, 0, 68), UDim2.new(0.5, -110, 0.6, 0), Color3.fromRGB(10, 10, 12))
+    local targetStroke, targetGlow = AddStrokeAndGlow(targetFrame)
+
+    -- Аватар
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 48, 0, 48)
+    avatar.Position = UDim2.new(0, 10, 0, 10)
+    avatar.BackgroundTransparency = 1
+    avatar.ZIndex = 6
+    avatar.Parent = targetFrame
+    Instance.new("UICorner", avatar).CornerRadius = UDim.new(0, 6)
+    avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150"
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -80, 0, 18)
+    nameLabel.Position = UDim2.new(0, 68, 0, 10)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Font = Enum.Font.FredokaOne
+    nameLabel.TextSize = 14
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Text = player.Name
+    nameLabel.ZIndex = 6
+    nameLabel.Parent = targetFrame
+
+    local hpLabel = Instance.new("TextLabel")
+    hpLabel.Size = UDim2.new(1, -80, 0, 14)
+    hpLabel.Position = UDim2.new(0, 68, 0, 26)
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.Font = Enum.Font.FredokaOne
+    hpLabel.TextSize = 11
+    hpLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+    hpLabel.TextXAlignment = Enum.TextXAlignment.Left
+    hpLabel.ZIndex = 6
+    hpLabel.Parent = targetFrame
+
+    local hpBar = Instance.new("Frame")
+    hpBar.Size = UDim2.new(1, -78, 0, 12)
+    hpBar.Position = UDim2.new(0, 68, 0, 44)
+    hpBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    hpBar.ZIndex = 6
+    hpBar.Parent = targetFrame
+    Instance.new("UICorner", hpBar).CornerRadius = UDim.new(0, 4)
+
+    local hpFill = Instance.new("Frame")
+    hpFill.Size = UDim2.new(1, 0, 1, 0)
+    hpFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    hpFill.ZIndex = 7
+    hpFill.Parent = hpBar
+    Instance.new("UICorner", hpFill).CornerRadius = UDim.new(0, 4)
+
+    local hpGrad = Instance.new("UIGradient")
+    hpGrad.Color = ColorSequence.new(library.theme.G1, library.theme.G2)
+    hpGrad.Parent = hpFill
+
+    local targetPlayer = player
+    local function updateTarget(playerObj)
+        targetPlayer = playerObj or player
+        nameLabel.Text = targetPlayer.Name
+        avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. targetPlayer.UserId .. "&w=150&h=150"
+    end
+
+    local hpConnection = RunService.RenderStepped:Connect(function()
+        if not library.flags.HUD_Target then
+            targetFrame.Visible = false
+            return
+        else
+            targetFrame.Visible = true
+        end
+        local char = targetPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health and hum.MaxHealth > 0 then
+            local hp = hum.Health
+            local maxHp = hum.MaxHealth
+            hpLabel.Text = "HP: " .. string.format("%.1f", hp)
+            TS:Create(hpFill, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.new(math.clamp(hp / maxHp, 0, 1), 0, 1, 0)
+            }):Play()
+        else
+            hpLabel.Text = "HP: 0.0"
+            hpFill.Size = UDim2.new(0, 0, 1, 0)
+        end
+    end)
+    table.insert(library._connections, hpConnection)
+
+    -- ===== 3. KEYBINDS =====
+    local kbFrame, registerKbDrag = CreateDraggableFrame("Keybinds", UDim2.new(0, 165, 0, 36), UDim2.new(0, 20, 0, 100), Color3.fromRGB(10, 10, 12))
+    local kbStroke, kbGlow = AddStrokeAndGlow(kbFrame)
+
+    -- Заголовок с градиентом
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 36)
+    header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)  -- основа для градиента
+    header.BorderSizePixel = 0
+    header.ZIndex = 6
+    header.Parent = kbFrame
+    registerKbDrag(header)
+
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 6)
+    headerCorner.Parent = header
+
+    local headerGrad = Instance.new("UIGradient")
+    headerGrad.Color = ColorSequence.new(library.theme.G1, library.theme.G2)
+    headerGrad.Parent = header
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 1, 0)
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.FredokaOne
+    title.TextSize = 14
+    title.TextColor3 = Color3.fromRGB(220, 220, 220)
+    title.Text = "Keybinds"
+    title.ZIndex = 8
+    title.Parent = header
+
+    -- Контейнер для списка
+    local listContainer = Instance.new("Frame")
+    listContainer.Size = UDim2.new(1, 0, 0, 0)
+    listContainer.Position = UDim2.new(0, 0, 0, 36)
+    listContainer.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+    listContainer.BorderSizePixel = 0
+    listContainer.ClipsDescendants = true
+    listContainer.ZIndex = 6
+    listContainer.Visible = false
+    listContainer.Parent = kbFrame
+
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 6)
+    listCorner.Parent = listContainer
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 5)
+    listLayout.Parent = listContainer
+
+    local listPad = Instance.new("UIPadding")
+    listPad.PaddingTop = UDim.new(0, 12)
+    listPad.PaddingBottom = UDim.new(0, 12)
+    listPad.PaddingLeft = UDim.new(0, 14)
+    listPad.PaddingRight = UDim.new(0, 14)
+    listPad.Parent = listContainer
+
+    -- Хранилище активных биндов
+    local activeBinds = {}  -- {moduleName = {key, label, element}}
+    local activeOrder = {}
+
+    local function updateKeybindsLayout()
+        local count = #activeOrder
+        local targetHeight = 36
+        if count > 0 then
+            targetHeight = 36 + (count * 22) + ((count - 1) * 5) + 24
+            listContainer.Size = UDim2.new(1, 0, 0, targetHeight - 36)
+            listContainer.Visible = true
+        else
+            listContainer.Size = UDim2.new(1, 0, 0, 0)
+            listContainer.Visible = false
+        end
+        if library.flags.HUD_Keybinds then
+            TS:Create(kbFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 165, 0, targetHeight)
+            }):Play()
+            kbFrame.Visible = true
+        else
+            kbFrame.Visible = false
+        end
+    end
+
+    -- Функция добавления бинда (вызывается из обработчика флагов)
+    local function addBind(moduleName, key, displayName)
+        if activeBinds[moduleName] then return end
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, 0, 0, 22)
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.FredokaOne
+        lbl.TextSize = 13
+        lbl.TextColor3 = Color3.fromRGB(240, 240, 240)
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Text = string.format("%s [%s]", displayName, key)
+        lbl.LayoutOrder = #activeOrder + 1
+        lbl.ZIndex = 7
+        lbl.Parent = listContainer
+        table.insert(activeOrder, moduleName)
+        activeBinds[moduleName] = {key = key, label = displayName, element = lbl}
+        updateKeybindsLayout()
+    end
+
+    local function removeBind(moduleName)
+        local data = activeBinds[moduleName]
+        if not data then return end
+        if data.element then data.element:Destroy() end
+        activeBinds[moduleName] = nil
+        for i, name in ipairs(activeOrder) do
+            if name == moduleName then
+                table.remove(activeOrder, i)
+                break
+            end
+        end
+        for i, name in ipairs(activeOrder) do
+            if activeBinds[name] and activeBinds[name].element then
+                activeBinds[name].element.LayoutOrder = i
+            end
+        end
+        updateKeybindsLayout()
+    end
+
+    -- Таблица для хранения отображаемых имён модулей
+    local moduleDisplayNames = {}
+
+    -- Регистрируем методы для внешнего использования
+    library.hud = {
+        setTarget = function(playerObj)
+            if playerObj and playerObj:IsA("Player") then
+                updateTarget(playerObj)
+            end
+        end,
+        toggleWatermark = function(state)
+            library.flags.HUD_Watermark = (state ~= nil and state) or not library.flags.HUD_Watermark
+            wmFrame.Visible = library.flags.HUD_Watermark
+        end,
+        toggleTarget = function(state)
+            library.flags.HUD_Target = (state ~= nil and state) or not library.flags.HUD_Target
+            targetFrame.Visible = library.flags.HUD_Target
+        end,
+        toggleKeybinds = function(state)
+            library.flags.HUD_Keybinds = (state ~= nil and state) or not library.flags.HUD_Keybinds
+            if library.flags.HUD_Keybinds then
+                kbFrame.Visible = true
+                updateKeybindsLayout()
+            else
+                kbFrame.Visible = false
+            end
+        end,
+        updateTheme = function()
+            local c1 = library.theme.G1
+            local c2 = library.theme.G2
+            for _, stroke in ipairs({wmStroke, targetStroke, kbStroke}) do
+                if stroke then stroke.Color = c1 end
+            end
+            for _, glow in ipairs({wmGlow, targetGlow, kbGlow}) do
+                if glow then glow.ImageColor3 = c1 end
+            end
+            if headerGrad then headerGrad.Color = ColorSequence.new(c1, c2) end
+            if hpGrad then hpGrad.Color = ColorSequence.new(c1, c2) end
+        end,
+        getWatermark = function() return wmFrame end,
+        getTarget = function() return targetFrame end,
+        getKeybinds = function() return kbFrame end,
+        -- Внутренние методы для работы с биндами
+        _addBind = addBind,
+        _removeBind = removeBind,
+        _moduleDisplayNames = moduleDisplayNames,
+    }
+
+    -- Устанавливаем флаги по умолчанию
+    library.flags.HUD_Watermark = true
+    library.flags.HUD_Target = true
+    library.flags.HUD_Keybinds = true
+
+    -- Инициализируем видимость
+    wmFrame.Visible = true
+    targetFrame.Visible = true
+    kbFrame.Visible = true
+    updateKeybindsLayout()
+end
+
+-- ============================================================
+-- 10. ДОПОЛНЕНИЕ CreateModule ДЛЯ РЕГИСТРАЦИИ ИМЁН МОДУЛЕЙ
+-- ============================================================
+-- Мы уже определили CreateModule в первой части, но нам нужно,
+-- чтобы при создании модуля его имя регистрировалось в moduleDisplayNames.
+-- Так как мы не можем переопределить CreateModule после того, как он был использован в AddSettingsTab,
+-- мы сделаем это до вызова AddSettingsTab. Но AddSettingsTab уже определена и использует CreateModule.
+-- Поэтому мы переопределим CreateModule прямо сейчас, перед вызовом start.
+
+-- Сохраним старую функцию
+local oldCreateModule = CreateModule
+CreateModule = function(parent, title, desc, setupFunc, mainCallback)
+    -- Регистрируем отображаемое имя
+    if library.hud and library.hud._moduleDisplayNames then
+        library.hud._moduleDisplayNames[title] = title
+    end
+    -- Вызываем старую функцию
+    return oldCreateModule(parent, title, desc, setupFunc, mainCallback)
+end
+
+-- ============================================================
+-- 11. ЗАПУСК (start)
+-- ============================================================
+local function start()
+    local menuMethods = BuildMenu()
+    for k, v in pairs(menuMethods) do
+        library[k] = v
+    end
+    library._menuOpen = false
+
+    -- Создаём HUD
+    setupHUD()
+
+    -- Переопределяем AddSettingsTab и AddThemesTab, чтобы они использовали обновлённый CreateModule?
+    -- Но они уже используют CreateModule, который мы переопределили выше, так что всё ок.
+
+    CreateNotify("Celestial", "Меню и HUD загружены! Нажмите " .. MenuKey.Name:upper() .. " для открытия.", 4)
+end
+
+-- ============================================================
+-- 12. ВЫЗОВ ЗАГРУЗЧИКА ИЛИ ПРЯМОЙ ЗАПУСК
+-- ============================================================
+if showLoader then
+    RunLoader(start)
+else
+    start()
+end
+
+-- ============================================================
+-- ВОЗВРАТ БИБЛИОТЕКИ
+-- ============================================================
+return library
+
+-- Конец первой части
