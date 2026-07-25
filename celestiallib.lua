@@ -1076,7 +1076,7 @@ local function CreateMenu(options)
             Grad.Rotation = 45
 
             TBtn.MouseButton1Click:Connect(function()
-                self.theme = colors
+                library.theme = colors
                 -- Обновляем все градиенты в меню
                 for _, data in pairs(ActiveGradients) do
                     if typeof(data) == "Instance" then
@@ -1093,8 +1093,8 @@ local function CreateMenu(options)
                     BindBtnRef.TextColor3 = colors.G1
                 end
                 -- Обновляем HUD
-                if self.hud and self.hud.updateTheme then
-                    self.hud.updateTheme()
+                if library.hud and library.hud.updateTheme then
+                    library.hud.updateTheme()
                 end
                 CreateNotify("Celestial", "Тема [" .. name .. "] применена!", 2)
             end)
