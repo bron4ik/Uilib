@@ -881,17 +881,9 @@ local function CreateMenu(options)
     -- 6. ВКЛАДКА НАСТРОЕК (AddSettingsTab)
     -- ------------------------------------------------------------------
     function library:AddSettingsTab()
-    -- Берём сохранённое окно из корня либки
-        local window = library.MainWindow
-        
-        if not window then
-            -- Если окна нет, выводим инфо и аккуратно выходим без краша всего скрипта
-            print("[Celestial HUD Error]: Не найдено объявленное окно MainWindow для настроек!")
-            return nil
-        end
-    
+
         -- Теперь window ТОЧНО существует, и AddTab сработает идеально
-        local settingsPage = window:AddTab("Settings", "rbxassetid://10734950309")
+        local settingsPage = AddTab("Settings", "rbxassetid://10734950309")
         
         if Pages["Settings"] then
             Pages["Settings"].Btn.Visible = false
@@ -1054,7 +1046,7 @@ local function CreateMenu(options)
     -- 7. ВКЛАДКА ТЕМ (AddThemesTab)
     -- ------------------------------------------------------------------
     function library:AddThemesTab()
-        local themesPage = self.AddTab("Themes", "rbxassetid://78489916461314", true)
+        local themesPage = AddTab("Themes", "rbxassetid://78489916461314", true)
 
         local ThemeGrid = themesPage:WaitForChild("UIGridLayout")
         ThemeGrid.CellSize = UDim2.new(0, 100, 0, 40)
