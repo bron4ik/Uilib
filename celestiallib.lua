@@ -999,7 +999,7 @@ local function CreateMenu(options)
                     end
                 end
             })
-            section:AddDropdown({
+            --[[section:AddDropdown({
                 text = "Цель для Target HUD",
                 flag = "HUD_Target_Player",
                 options = {"Локальный игрок", "Ближайший игрок", "Первый в списке"},
@@ -1036,9 +1036,184 @@ local function CreateMenu(options)
                         end
                     end
                 end
-            })
+            })--]]
         end)
 
+        -- ============================================================
+        -- МОДУЛЬ КОНФИГУРАЦИЙ (Путь: Celestial/Configs)
+        -- ============================================================
+        library:CreateModule(settingsPage, "Configuration", "Управление сохранениями", function(section)
+            
+            -- Главный путь к папке с конфигами
+            local baseFolder = "Celestial"
+            local configFolder = "Celestial/Configs"
+    
+            -- 1. Выпадающее меню со списком доступных файлов конфигов
+            local configDropdown = section:AddDropdown({
+                text = "Выбрать конфиг",
+                flag = "SelectedConfig",
+                options = {}, 
+                default = ""
+            })
+    
+            -- Вспомогательная функция для сканирования и обновления списка файлов
+            local function refreshConfigList()
+                -- Проверяем и создаем структуру папок (сначала корень, потом подпапку)
+                if not isfolder(baseFolder) then makefolder(baseFolder) end
+                if not isfolder(configFolder) then makefolder(configFolder) end
+                
+                local files = listfiles(configFolder)
+                local options = {}
+                
+                for _, filePath in ipairs(files) do
+                    -- Вырезаем чистое имя файла (например, "Celestial/Configs/legit.json" -> "legit")
+                    local fileName = filePath:match("([^/]+)%.json$") or filePath:match("([^/]+)$")
+                    if fileName then
+                        table.insert(options, fileName)
+                    end
+                end
+                
+                if #options == 0 then table.insert(options, "Нет конфигов") end
+                configDropdown:SetOptions(options)
+            end
+    
+            -- 2. Кнопка REFRESH (Обновить список)
+            section:AddButton({
+                text = "Обновить список",
+                callback = function()
+                    refreshConfigList()
+                    library.Notify("Celestial", "Список конфигураций обновлен!", 2)
+                end
+            })
+    
+            -- 3. Кнопка SAVE (Перезаписать текущие настройки в уже выбранный файл)
+            section:AddButton({
+                text = "Сохранить в выбранный",
+                callback = function()
+                    local selected = library.flags.SelectedConfig
+                    if not selected or selected == "" or selected == "Нет конфигов" then
+                        library.Notify("Error", "Сначала выберите конфиг для перезаписи!", 3)
+                        return
+                    end
+    
+                    if not isfolder(baseFolder) then makefolder(baseFolder) end
+                    if not isfolder(configFolder) then makefolder(configFolder) end
+                    
+                    local HttpService = game:GetService("HttpService")
+                    local success, encoded = pcall(function() return HttpService:JSONEncode(library.flags) end)
+                    
+                    if success then
+                        writefile(configFolder .. "/" .. selected .. ".json", encoded)
+                        library.Notify("Celestial", "Конфиг '" .. selected .. "' успешно перезаписан!", 3)
+                        refreshConfigList()
+                    else
+                        library.Notify("Error", "Не удалось закодировать настройки!", 3)
+                    end
+                end
+            })
+    
+            -- 4. Кнопка CREATE NEW (Создать абсолютно новый файл с кастомным именем)
+            section:AddButton({
+                text = "Создать новый конфиг",
+                callback = function()
+                    -- Для ввода кастомного имени читаем флаг из текстбокса. 
+                    -- Если он пустой, запрашиваем ввод через стандартное окно Roblox или ставим дефолт.
+                    local newName = library.flags.NewConfigNameInput or ""
+                    newName = newName:gsub("%s+", "") -- Вырезаем пробелы, чтобы имя файла не ломалось
+                    
+                    if newName == "" then
+                        library.Notify("Error", "Введите имя для нового конфига в текстовое поле!", 3)
+                        return
+                    end
+    
+                    if not isfolder(baseFolder) then makefolder(baseFolder) end
+                    if not isfolder(configFolder) then makefolder(configFolder) end
+                    
+                    local path = configFolder .. "/" .. newName .. ".json"
+                    if isfile(path) then
+                        library.Notify("Error", "Конфиг с таким именем уже существует!", 3)
+                        return
+                    end
+                    
+                    local HttpService = game:GetService("HttpService")
+                    local success, encoded = pcall(function() return HttpService:JSONEncode(library.flags) end)
+                    
+                    if success then
+                        writefile(path, encoded)
+                        library.Notify("Celestial", "Новый конфиг '" .. newName .. "' успешно создан!", 3)
+                        refreshConfigList()
+                        
+                        -- Визуально переключаем дропдаун на только что созданный файл
+                        if configDropdown and configDropdown.Set then
+                            pcall(function() configDropdown:Set(newName) end)
+                        end
+                    else
+                        library.Notify("Error", "Не удалось закодировать настройки!", 3)
+                    end
+                end
+            })
+
+    
+            -- 4. Кнопка LOAD (Загрузить выбранный файл)
+            section:AddButton({
+                text = "Загрузить выбранный",
+                callback = function()
+                    local selected = library.flags.SelectedConfig
+                    
+                    if not selected or selected == "" or selected == "Нет конфигов" then
+                        library.Notify("Error", "Сначала выберите конфиг из списка!", 3)
+                        return
+                    end
+                    
+                    local path = configFolder .. "/" .. selected .. ".json"
+                    if isfile(path) then
+                        local content = readfile(path)
+                        local HttpService = game:GetService("HttpService")
+                        local success, decoded = pcall(function() return HttpService:JSONDecode(content) end)
+                        
+                        if success and type(decoded) == "table" then
+                            -- Применяем сохраненные флаги
+                            for flag, value in pairs(decoded) do
+                                library.flags[flag] = value
+                                -- Обновляем визуальное состояние кнопок/слайдеров в меню
+                                local element = library.modules[flag]
+                                if element and element.Set then
+                                    pcall(function() element:Set(value) end)
+                                end
+                            end
+                            library.Notify("Celestial", "Конфиг '" .. selected .. "' успешно загружен!", 3)
+                        else
+                            library.Notify("Error", "Файл конфигурации поврежден!", 3)
+                        end
+                    else
+                        library.Notify("Error", "Файл не найден на диске!", 3)
+                    end
+                end
+            })
+    
+            -- 5. Кнопка DELETE (Удалить файл с диска)
+            section:AddButton({
+                text = "Удалить выбранный",
+                callback = function()
+                    local selected = library.flags.SelectedConfig
+                    
+                    if not selected or selected == "" or selected == "Нет конфигов" then
+                        library.Notify("Error", "Нечего удалять!", 3)
+                        return
+                    end
+                    
+                    local path = configFolder .. "/" .. selected .. ".json"
+                    if isfile(path) then
+                        delfile(path)
+                        library.Notify("Celestial", "Конфиг '" .. selected .. "' удален из памяти.", 3)
+                        refreshConfigList()
+                    end
+                end
+            })
+    
+            -- Первичный скан папки при инициализации меню
+            task.spawn(refreshConfigList)
+        end)   
         return settingsPage
     end
 
