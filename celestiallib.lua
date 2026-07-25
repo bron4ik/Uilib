@@ -895,7 +895,7 @@ local function CreateMenu(options)
         SLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
         -- Blur toggle
-        self.AddToggle(settingsPage, {
+        AddToggle(settingsPage, {
             text = "Background Blur",
             flag = "MenuBlur",
             default = false,
@@ -917,7 +917,7 @@ local function CreateMenu(options)
         })
 
         -- Waifu module
-        self.CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
+        CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
             section:AddDropdown({
                 text = "Character",
                 flag = "WaifuSelection",
@@ -968,7 +968,7 @@ local function CreateMenu(options)
         end)
 
         -- HUD Elements (с реальной привязкой)
-        self.CreateModule(settingsPage, "HUD Elements", "Управление интерфейсом", function(section)
+        CreateModule(settingsPage, "HUD Elements", "Управление интерфейсом", function(section)
             section:AddToggle({
                 text = "Показывать Watermark",
                 flag = "HUD_Watermark",
