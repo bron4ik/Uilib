@@ -910,7 +910,7 @@ local function CreateMenu(options)
                     local CloseTween = TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { Size = 0 })
                     CloseTween:Play()
                     CloseTween.Completed:Connect(function()
-                        if not self.flags["MenuBlur"] then B.Enabled = false end
+                        if not library.flags["MenuBlur"] then B.Enabled = false end
                     end)
                 end
             end
@@ -924,7 +924,7 @@ local function CreateMenu(options)
                 options = { "None", "Mellstroy" },
                 default = "None",
                 callback = function(val)
-                    if val == "Mellstroy" and self.flags["Menu Waifu"] then
+                    if val == "Mellstroy" and library.flags["Menu Waifu"] then
                         WaifuImg.Image = GetMellstroy("mellstroy.png", "https://raw.githubusercontent.com/bron4ik/Uilib/main/mellstroy.png")
                         TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
                     else
@@ -939,7 +939,7 @@ local function CreateMenu(options)
         BindBtn.Size = UDim2.new(1, -10, 0, 30)
         BindBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
         BindBtn.Text = "Menu Bind: " .. MenuKey.Name:upper()
-        BindBtn.TextColor3 = self.theme.G1
+        BindBtn.TextColor3 = library.theme.G1
         BindBtn.Font = Enum.Font.GothamBold
         BindBtn.TextSize = 13
         Instance.new("UICorner", BindBtn)
@@ -958,12 +958,12 @@ local function CreateMenu(options)
             if isBinding then
                 MenuKey = i.KeyCode
                 BindBtn.Text = "Menu Bind: " .. i.KeyCode.Name:upper()
-                BindBtn.TextColor3 = self.theme.G1
+                BindBtn.TextColor3 = library.theme.G1
                 isBinding = false
                 return
             end
             if i.KeyCode == MenuKey then
-                self.ToggleMenu()
+                library.ToggleMenu()
             end
         end)
 
@@ -974,8 +974,8 @@ local function CreateMenu(options)
                 flag = "HUD_Watermark",
                 default = true,
                 callback = function(v)
-                    if self._hudFrames and self._hudFrames.watermark then
-                        self._hudFrames.watermark.Visible = v
+                    if library._hudFrames and library._hudFrames.watermark then
+                        library._hudFrames.watermark.Visible = v
                     end
                 end
             })
@@ -984,8 +984,8 @@ local function CreateMenu(options)
                 flag = "HUD_Target",
                 default = true,
                 callback = function(v)
-                    if self._hudFrames and self._hudFrames.target then
-                        self._hudFrames.target.Visible = v
+                    if library._hudFrames and library._hudFrames.target then
+                        library._hudFrames.target.Visible = v
                     end
                 end
             })
@@ -994,8 +994,8 @@ local function CreateMenu(options)
                 flag = "HUD_Keybinds",
                 default = true,
                 callback = function(v)
-                    if self._hudFrames and self._hudFrames.keybinds then
-                        self._hudFrames.keybinds.Visible = v
+                    if library._hudFrames and library._hudFrames.keybinds then
+                        library._hudFrames.keybinds.Visible = v
                     end
                 end
             })
@@ -1006,8 +1006,8 @@ local function CreateMenu(options)
                 default = "Локальный игрок",
                 callback = function(val)
                     if val == "Локальный игрок" then
-                        if self.hud and self.hud.setTarget then
-                            self.hud.setTarget(player)
+                        if library.hud and library.hud.setTarget then
+                            library.hud.setTarget(player)
                         end
                     elseif val == "Ближайший игрок" then
                         local closest, minDist = nil, math.huge
@@ -1020,8 +1020,8 @@ local function CreateMenu(options)
                                 end
                             end
                         end
-                        if self.hud and self.hud.setTarget then
-                            self.hud.setTarget(closest or player)
+                        if library.hud and library.hud.setTarget then
+                            library.hud.setTarget(closest or player)
                         end
                     elseif val == "Первый в списке" then
                         local first = nil
@@ -1031,8 +1031,8 @@ local function CreateMenu(options)
                                 break
                             end
                         end
-                        if self.hud and self.hud.setTarget then
-                            self.hud.setTarget(first or player)
+                        if library.hud and library.hud.setTarget then
+                            library.hud.setTarget(first or player)
                         end
                     end
                 end
@@ -1082,7 +1082,7 @@ local function CreateMenu(options)
                     if typeof(data) == "Instance" then
                         data.Color = ColorSequence.new(colors.G1, colors.G2)
                     elseif type(data) == "table" then
-                        if data.Type == "Toggle" and self.flags[data.Flag] then
+                        if data.Type == "Toggle" and library.flags[data.Flag] then
                             TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
                         elseif data.Type == "Slider" then
                             TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
