@@ -1126,7 +1126,7 @@ local function CreateMenu(options)
                 end
             })
         
-            -- 4. ТОГГЛ-КНОПКА LOAD (Загрузить из выбранного слота)
+            -- 4. ТОГГЛ-КНОПКА LOAD (Загрузить из выбранного слота — ИСПРАВЛЕННАЯ ВЕРСИЯ)
             local loadToggle
             loadToggle = section:AddToggle({
                 text = "Загрузить из слота",
@@ -1143,24 +1143,59 @@ local function CreateMenu(options)
                             local success, decoded = pcall(function() return HttpService:JSONDecode(content) end)
                             
                             if success and type(decoded) == "table" then
+                                -- Сначала принудительно накатываем все значения флагов в память
                                 for flag, value in pairs(decoded) do
                                     library.flags[flag] = value
-                                    local element = library.modules[flag]
-                                    if element and element.Set then
-                                        pcall(function() element:Set(value) end)
+                                end
+                                
+                                -- Теперь отдельно и безопасно пытаемся обновить визуал кнопок в меню
+                                for flag, value in pairs(decoded) do
+                                    -- Ищем объект элемента во всех возможных таблицах либки
+                                    local element = (library.modules and library.modules[flag]) 
+                                                 or (library.Elements and library.Elements[flag]) 
+                                                 or (library.Objects and library.Objects[flag])
+                                    
+                                    if element then
+                                        pcall(function()
+                                            -- Перебираем все варианты названия функций обновления в разных UI-либах
+                                            if element.Set then 
+                                                element:Set(value)
+                                            elseif element.set then 
+                                                element:set(value)
+                                            elseif element.SetValue then 
+                                                element:SetValue(value)
+                                            elseif element.setvalue then 
+                                                element:setvalue(value)
+                                            elseif type(element) == "table" then
+                                                -- Если это прямой флаг-функция
+                                                element[flag] = value
+                                            end
+                                        end)
                                     end
                                 end
-                                if library.Notify then library.Notify("Celestial", "Конфиг " .. slotName .. " успешно загружен!", 3) end
+                                
+                                if library.Notify then 
+                                    library.Notify("Celestial", "Конфиг " .. slotName .. " успешно загружен!", 3) 
+                                end
                             else
                                 if library.Notify then library.Notify("Error", "Файл слота поврежден!", 3) end
                             end
                         else
                             if library.Notify then library.Notify("Error", "Этот слот еще пустой!", 3) end
                         end
-                        pcall(function() loadToggle:Set(false) end)
+                        
+                        -- Безопасный сброс галочки тоггла-кнопки
+                        pcall(function() 
+                            if loadToggle and loadToggle.Set then 
+                                loadToggle:Set(false) 
+                            elseif loadToggle and loadToggle.set then 
+                                loadToggle:set(false) 
+                            end 
+                        end)
                     end
                 end
             })
+
         
             -- 5. ТОГГЛ-КНОПКА DELETE (Очистить слот)
             local deleteToggle
