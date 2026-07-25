@@ -1,5 +1,5 @@
 -- ============================================================
--- CELESTIAL UI LIBRARY (с интегрированным HUD)
+-- CELESTIAL UI LIBRARY (с интегрированным HUD) – FULL FIXED
 -- ============================================================
 -- Использование:
 -- local lib = loadstring(game:HttpGet("..."))({ showLoader = true })
@@ -9,6 +9,7 @@
 -- Методы HUD:
 -- lib.hud.setTarget(player) – сменить цель
 -- lib.hud.toggleWatermark(state), toggleTarget(state), toggleKeybinds(state)
+-- lib.hud.updateTheme() – обновить цвета по текущей теме
 -- lib.hud.getWatermark(), getTarget(), getKeybinds() – возвращают фреймы
 -- Флаги: HUD_Watermark, HUD_Target, HUD_Keybinds (доступны через lib.flags)
 -- ============================================================
@@ -25,7 +26,6 @@ local function CreateMenu(options)
     local Stats = game:GetService("Stats")
     local Players = game:GetService("Players")
     local player = Players.LocalPlayer
-
 
     -- Вспомогательные функции для загрузки картинок
     local function GetLoaderImg(name, url)
@@ -50,33 +50,25 @@ local function CreateMenu(options)
         end
         return getcustomasset(path)
     end
-    
-    -- Вспомогательные функции для загрузки картинок (GetLoaderImg, GetMellstroy)...
-    -- (оставляем как было)
 
     -- Библиотека (будет возвращена)
     local library = {
         flags = {},
         theme = { G1 = Color3.fromRGB(180, 40, 40), G2 = Color3.fromRGB(40, 80, 200) },
         _menuOpen = false,
-        hud = {} -- сюда сложим методы управления HUD
+        _connections = {}, -- для хранения подключений (для Unload)
+        hud = {}
     }
 
-    -- Переменные GUI
+    -- Переменные GUI (меню)
     local ScreenGui, Main, Sidebar, Content, BottomList, Pages, ActiveGradients
     local WaifuGui, WaifuImg
     local MenuKey = Enum.KeyCode.RightShift
     local BindBtnRef = nil
 
-    -- ... (весь код библиотеки: CreateNotify, AddToggle, AddSlider, AddColorPicker, AddDropdown, CreateModule, AddTab, AddSettingsTab, AddThemesTab, BuildMenu, RunLoader, start и т.д.)
-
-    -- Переменные GUI
-    local ScreenGui, Main, Sidebar, Content, BottomList, Pages, ActiveGradients
-    local WaifuGui, WaifuImg
-    local MenuKey = Enum.KeyCode.RightShift
-    local BindBtnRef = nil  -- ссылка на кнопку бинда для обновления цвета
-
-    -- Уведомления
+    -- ============================================================
+    -- УВЕДОМЛЕНИЯ
+    -- ============================================================
     local function CreateNotify(title, text, duration)
         title = title or "Celestial"
         text = text or "Notification"
@@ -145,7 +137,9 @@ local function CreateMenu(options)
         end)
     end
 
-    -- Элементы управления (публичные)
+    -- ============================================================
+    -- ЭЛЕМЕНТЫ УПРАВЛЕНИЯ
+    -- ============================================================
     local function AddToggle(parent, config)
         local state = config.default or false
         library.flags[config.flag] = state
@@ -457,7 +451,9 @@ local function CreateMenu(options)
         end)
     end
 
-    -- Модуль (карточка с переключателем)
+    -- ============================================================
+    -- МОДУЛЬ (карточка с переключателем)
+    -- ============================================================
     local function CreateModule(parent, title, desc, setupFunc, mainCallback)
         local Mod = Instance.new("TextButton", parent)
         Mod.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
@@ -581,7 +577,9 @@ local function CreateMenu(options)
         end)
     end
 
-    -- Создание вкладки (публичный метод)
+    -- ============================================================
+    -- ВКЛАДКИ
+    -- ============================================================
     local function AddTab(name, iconId, isBottom)
         local parent = isBottom and BottomList or BtnList
         local Btn = Instance.new("TextButton", parent)
@@ -613,7 +611,6 @@ local function CreateMenu(options)
         Page.ScrollBarThickness = 0
         Instance.new("UIGridLayout", Page).CellSize = UDim2.new(0, 220, 0, 70)
 
-        -- Если это первая вкладка, делаем её активной
         local existingTabs = {}
         for _, v in pairs(Pages) do table.insert(existingTabs, v) end
         if #existingTabs == 0 then
@@ -640,27 +637,406 @@ local function CreateMenu(options)
         return Page
     end
 
+    -- ============================================================
+    -- СИСТЕМНАЯ ВКЛАДКА "SETTINGS" (базовая)
+    -- ============================================================
+    local function AddSettingsTab()
+        local settingsPage = AddTab("Settings", "rbxassetid://10734950309")
+        if Pages["Settings"] then
+            Pages["Settings"].Btn.Visible = false
+        end
 
-    
+        local SLayout = Instance.new("UIListLayout", settingsPage)
+        SLayout.Padding = UDim.new(0, 10)
+        SLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        SLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        AddToggle(settingsPage, {
+            text = "Background Blur",
+            flag = "MenuBlur",
+            default = false,
+            callback = function(v)
+                local Lighting = game:GetService("Lighting")
+                local B = Lighting:FindFirstChild("MenuBlur") or Instance.new("BlurEffect", Lighting)
+                B.Name = "MenuBlur"
+                if v then
+                    B.Enabled = true
+                    TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = 18 }):Play()
+                else
+                    local CloseTween = TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { Size = 0 })
+                    CloseTween:Play()
+                    CloseTween.Completed:Connect(function()
+                        if not library.flags["MenuBlur"] then B.Enabled = false end
+                    end)
+                end
+            end
+        })
+
+        CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
+            section:AddDropdown({
+                text = "Character",
+                flag = "WaifuSelection",
+                options = { "None", "Mellstroy" },
+                default = "None",
+                callback = function(val)
+                    if val == "Mellstroy" and library.flags["Menu Waifu"] then
+                        WaifuImg.Image = GetMellstroy("mellstroy.png", "https://raw.githubusercontent.com/bron4ik/Uilib/main/mellstroy.png")
+                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
+                    else
+                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
+                    end
+                end
+            })
+        end)
+
+        local BindBtn = Instance.new("TextButton", settingsPage)
+        BindBtn.Size = UDim2.new(1, -10, 0, 30)
+        BindBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        BindBtn.Text = "Menu Bind: " .. MenuKey.Name:upper()
+        BindBtn.TextColor3 = library.theme.G1
+        BindBtn.Font = Enum.Font.GothamBold
+        BindBtn.TextSize = 13
+        Instance.new("UICorner", BindBtn)
+
+        BindBtnRef = BindBtn
+        table.insert(ActiveGradients, { Object = BindBtn, Type = "Slider" })
+
+        local isBinding = false
+        BindBtn.MouseButton1Click:Connect(function()
+            isBinding = true
+            BindBtn.Text = "..."
+        end)
+
+        UIS.InputBegan:Connect(function(i, g)
+            if g then return end
+            if isBinding then
+                MenuKey = i.KeyCode
+                BindBtn.Text = "Menu Bind: " .. i.KeyCode.Name:upper()
+                BindBtn.TextColor3 = library.theme.G1
+                isBinding = false
+                return
+            end
+            if i.KeyCode == MenuKey then
+                ToggleMenu()
+            end
+        end)
+
+        return settingsPage
+    end
+
     -- ============================================================
-    --  ИНТЕГРАЦИЯ HUD В БИБЛИОТЕКУ
+    -- СИСТЕМНАЯ ВКЛАДКА "THEMES"
     -- ============================================================
-    -- Эта функция будет вызвана после создания основного GUI (BuildMenu)
+    local function AddThemesTab()
+        local themesPage = AddTab("Themes", "rbxassetid://78489916461314", true)
+
+        local ThemeGrid = themesPage:WaitForChild("UIGridLayout")
+        ThemeGrid.CellSize = UDim2.new(0, 100, 0, 40)
+        ThemeGrid.CellPadding = UDim2.new(0, 10, 0, 10)
+        ThemeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        local AvailableThemes = {
+            ["Celestial"] = { G1 = Color3.fromRGB(180, 40, 40), G2 = Color3.fromRGB(40, 80, 200) },
+            ["Vape"] = { G1 = Color3.fromRGB(0, 255, 200), G2 = Color3.fromRGB(0, 150, 255) },
+            ["Emerald"] = { G1 = Color3.fromRGB(40, 200, 80), G2 = Color3.fromRGB(20, 100, 40) },
+            ["Amethyst"] = { G1 = Color3.fromRGB(150, 50, 250), G2 = Color3.fromRGB(70, 20, 150) },
+            ["Sunrise"] = { G1 = Color3.fromRGB(255, 150, 50), G2 = Color3.fromRGB(200, 50, 50) }
+        }
+
+        for name, colors in pairs(AvailableThemes) do
+            local TBtn = Instance.new("TextButton", themesPage)
+            TBtn.Name = name
+            TBtn.Text = name:upper()
+            TBtn.TextColor3 = Color3.new(1, 1, 1)
+            TBtn.Font = Enum.Font.GothamBold
+            TBtn.TextSize = 10
+            TBtn.BackgroundColor3 = Color3.new(1, 1, 1)
+            TBtn.AutoButtonColor = false
+            Instance.new("UICorner", TBtn).CornerRadius = UDim.new(0, 6)
+            local Grad = Instance.new("UIGradient", TBtn)
+            Grad.Color = ColorSequence.new(colors.G1, colors.G2)
+            Grad.Rotation = 45
+
+            TBtn.MouseButton1Click:Connect(function()
+                library.theme = colors
+                for _, data in pairs(ActiveGradients) do
+                    if typeof(data) == "Instance" then
+                        data.Color = ColorSequence.new(colors.G1, colors.G2)
+                    elseif type(data) == "table" then
+                        if data.Type == "Toggle" then
+                            if library.flags[data.Flag] then
+                                TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                            end
+                        elseif data.Type == "Slider" then
+                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                        end
+                    end
+                end
+                if BindBtnRef then
+                    BindBtnRef.TextColor3 = colors.G1
+                end
+                -- Обновляем HUD
+                if library.hud.updateTheme then
+                    library.hud.updateTheme()
+                end
+                CreateNotify("Celestial", "Тема [" .. name .. "] применена мгновенно!", 2)
+            end)
+        end
+
+        return themesPage
+    end
+
+    -- ============================================================
+    -- ПОСТРОЕНИЕ ГЛАВНОГО МЕНЮ
+    -- ============================================================
+    local function BuildMenu()
+        local MenuName = "Celestial"
+        if CoreGui:FindFirstChild(MenuName) then CoreGui[MenuName]:Destroy() end
+
+        ScreenGui = Instance.new("ScreenGui", CoreGui)
+        ScreenGui.Name = MenuName
+        ScreenGui.IgnoreGuiInset = true
+
+        ActiveGradients = {}
+
+        Main = Instance.new("Frame", ScreenGui)
+        Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+        Main.Size = UDim2.new(0, 700, 0, 0)
+        Main.Position = UDim2.new(0.5, -350, 0.5, 0)
+        Main.Active = true
+        Main.Draggable = true
+        Main.Visible = false
+        Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+        Instance.new("UIStroke", Main).Color = Color3.fromRGB(45, 45, 50)
+
+        Sidebar = Instance.new("Frame", Main)
+        Sidebar.Size = UDim2.new(0, 180, 1, 0)
+        Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+        Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 12)
+
+        local Logo = Instance.new("TextLabel", Sidebar)
+        Logo.Text = MenuName
+        Logo.Size = UDim2.new(1, 0, 0, 60)
+        Logo.BackgroundTransparency = 1
+        Logo.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Logo.Font = Enum.Font.GothamBold
+        Logo.TextSize = 22
+
+        BtnList = Instance.new("Frame", Sidebar)
+        BtnList.Position = UDim2.new(0, 0, 0, 70)
+        BtnList.Size = UDim2.new(1, 0, 1, -120)
+        BtnList.BackgroundTransparency = 1
+        Instance.new("UIListLayout", BtnList).Padding = UDim.new(0, 5)
+        BtnList.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        Content = Instance.new("Frame", Main)
+        Content.Position = UDim2.new(0, 195, 0, 20)
+        Content.Size = UDim2.new(1, -215, 1, -40)
+        Content.BackgroundTransparency = 1
+
+        BottomList = Instance.new("Frame", Sidebar)
+        BottomList.Size = UDim2.new(1, 0, 0, 100)
+        BottomList.Position = UDim2.new(0, 0, 1, -110)
+        BottomList.BackgroundTransparency = 1
+        local BLayout = Instance.new("UIListLayout", BottomList)
+        BLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        BLayout.Padding = UDim.new(0, 5)
+        BLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        Pages = {}
+
+        local UnloadBtn = Instance.new("TextButton", BottomList)
+        UnloadBtn.Size = UDim2.new(0, 160, 0, 38)
+        UnloadBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        UnloadBtn.Text = "          Выйти"
+        UnloadBtn.TextColor3 = Color3.fromRGB(200, 50, 50)
+        UnloadBtn.Font = Enum.Font.GothamBold
+        UnloadBtn.TextSize = 13
+        UnloadBtn.TextXAlignment = Enum.TextXAlignment.Left
+        Instance.new("UICorner", UnloadBtn)
+        local UnloadIcon = Instance.new("ImageLabel", UnloadBtn)
+        UnloadIcon.Size = UDim2.new(0, 18, 0, 18)
+        UnloadIcon.Position = UDim2.new(0, 12, 0.5, -9)
+        UnloadIcon.BackgroundTransparency = 1
+        UnloadIcon.Image = "rbxassetid://10723356507"
+        UnloadIcon.ImageColor3 = Color3.fromRGB(200, 50, 50)
+
+        UnloadBtn.MouseButton1Click:Connect(function()
+            library.Unload()
+        end)
+
+        local GearBtn = Instance.new("ImageButton", Main)
+        GearBtn.Size = UDim2.new(0, 20, 0, 20)
+        GearBtn.Position = UDim2.new(1, -30, 0, 10)
+        GearBtn.BackgroundTransparency = 1
+        GearBtn.Image = "rbxassetid://10734950309"
+        GearBtn.ImageColor3 = Color3.fromRGB(200, 200, 200)
+
+        GearBtn.MouseButton1Click:Connect(function()
+            if Pages and Pages["Settings"] then
+                for _, v in pairs(Pages) do
+                    v.Page.Visible = false
+                    v.Btn.TextColor3 = Color3.fromRGB(140, 140, 140)
+                    v.Icon.ImageColor3 = Color3.fromRGB(140, 140, 140)
+                    v.Grad.Enabled = false
+                end
+                local settings = Pages["Settings"]
+                settings.Page.Visible = true
+                settings.Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                settings.Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+                settings.Grad.Enabled = true
+            else
+                CreateNotify("Celestial", "Вкладка Settings не найдена", 2)
+            end
+        end)
+
+        WaifuGui = Instance.new("ScreenGui", CoreGui)
+        WaifuGui.Name = "CelestialWaifu"
+        WaifuGui.DisplayOrder = -1
+        WaifuImg = Instance.new("ImageLabel", WaifuGui)
+        WaifuImg.Name = "WaifuDisplay"
+        WaifuImg.Size = UDim2.new(0.4, 0, 0.6, 0)
+        WaifuImg.Position = UDim2.new(1, 0, 1, 0)
+        WaifuImg.AnchorPoint = Vector2.new(1, 1)
+        WaifuImg.BackgroundTransparency = 1
+        WaifuImg.ImageTransparency = 1
+        WaifuImg.ScaleType = Enum.ScaleType.Fit
+
+        function ToggleMenu()
+            library._menuOpen = not library._menuOpen
+            if library._menuOpen then
+                if library.flags["Menu Waifu"] and library.flags["WaifuSelection"] == "Mellstroy" then
+                    TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
+                end
+                local blurFlag = library.flags["MenuBlur"]
+                local Lighting = game:GetService("Lighting")
+                local bEffect = Lighting:FindFirstChild("MenuBlur")
+                if blurFlag then
+                    if not bEffect then
+                        bEffect = Instance.new("BlurEffect", Lighting)
+                        bEffect.Name = "MenuBlur"
+                    end
+                    bEffect.Enabled = true
+                    TS:Create(bEffect, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = 18 }):Play()
+                end
+                Main.Visible = true
+                TS:Create(Main, TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, 700, 0, 500),
+                    Position = UDim2.new(0.5, -350, 0.5, -250),
+                    BackgroundTransparency = 0
+                }):Play()
+            else
+                local bEffect = game:GetService("Lighting"):FindFirstChild("MenuBlur")
+                if bEffect then
+                    TS:Create(bEffect, TweenInfo.new(0.3), { Size = 0 }):Play()
+                    task.delay(0.3, function()
+                        if not library._menuOpen then bEffect.Enabled = false end
+                    end)
+                end
+                for _, v in pairs(Main:GetChildren()) do
+                    if v:IsA("Frame") and v.Name:find("SWindow") then v.Visible = false end
+                end
+                local CloseTween = TS:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                    Size = UDim2.new(0, 700, 0, 0),
+                    Position = UDim2.new(0.5, -350, 0.5, 0),
+                    BackgroundTransparency = 1
+                })
+                CloseTween:Play()
+                CloseTween.Completed:Connect(function()
+                    if not library._menuOpen then
+                        Main.Visible = false
+                        library._menuOpen = false
+                    end
+                end)
+                TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
+            end
+        end
+
+        return {
+            AddTab = AddTab,
+            AddToggle = AddToggle,
+            AddSlider = AddSlider,
+            AddColorPicker = AddColorPicker,
+            AddDropdown = AddDropdown,
+            CreateModule = CreateModule,
+            AddSettingsTab = AddSettingsTab,
+            AddThemesTab = AddThemesTab,
+            ToggleMenu = ToggleMenu,
+            SetMenuKey = function(key)
+                MenuKey = key
+                if BindBtnRef then
+                    BindBtnRef.Text = "Menu Bind: " .. key.Name:upper()
+                    BindBtnRef.TextColor3 = library.theme.G1
+                end
+            end,
+            GetFlags = function() return library.flags end,
+            GetTheme = function() return library.theme end,
+            SetTheme = function(colors)
+                library.theme = colors
+                for _, data in pairs(ActiveGradients) do
+                    if typeof(data) == "Instance" then
+                        data.Color = ColorSequence.new(colors.G1, colors.G2)
+                    elseif type(data) == "table" then
+                        if data.Type == "Toggle" and library.flags[data.Flag] then
+                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                        elseif data.Type == "Slider" then
+                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                        end
+                    end
+                end
+                if BindBtnRef then
+                    BindBtnRef.TextColor3 = colors.G1
+                end
+                if library.hud.updateTheme then
+                    library.hud.updateTheme()
+                end
+                CreateNotify("Celestial", "Тема обновлена", 1)
+            end,
+            Notify = CreateNotify,
+            Unload = function()
+                -- Отключаем все подключения
+                for _, conn in ipairs(library._connections) do
+                    pcall(function() conn:Disconnect() end)
+                end
+                library._connections = {}
+                -- Удаляем HUD ScreenGui
+                local hudGui = CoreGui:FindFirstChild("CelestialHUD")
+                if hudGui then hudGui:Destroy() end
+                -- Удаляем главное меню
+                if ScreenGui then ScreenGui:Destroy() end
+                -- Удаляем Waifu
+                if WaifuGui then WaifuGui:Destroy() end
+                -- Удаляем нотификации
+                local notifGui = CoreGui:FindFirstChild("CelestialNotifs")
+                if notifGui then notifGui:Destroy() end
+                -- Сбрасываем флаги
+                for flag, _ in pairs(library.flags) do
+                    library.flags[flag] = false
+                end
+                library._menuOpen = false
+                -- Очищаем ссылки
+                library.hud = nil
+                print("[Celestial] Unload completed.")
+            end
+        }
+    end
+
+    -- ============================================================
+    -- ИНТЕГРАЦИЯ HUD (исправленная и завершённая)
+    -- ============================================================
     local function setupHUD()
-        -- Удаляем старые HUD элементы (если они были созданы ранее)
         for _, name in ipairs({"CelestialHUD", "CelestialWatermarkGui", "CelestialTargetHudGui", "CelestialKeybindsGui"}) do
             if CoreGui:FindFirstChild(name) then CoreGui[name]:Destroy() end
         end
 
-        -- Создаём отдельный ScreenGui для HUD (чтобы не пересекался с основным меню)
         local hudScreenGui = Instance.new("ScreenGui")
         hudScreenGui.Name = "CelestialHUD"
         hudScreenGui.IgnoreGuiInset = true
         hudScreenGui.ResetOnSpawn = false
         hudScreenGui.DisplayOrder = 99999999
         hudScreenGui.Parent = CoreGui
+        table.insert(library._connections, hudScreenGui.Destroying) -- не совсем корректно, но для очистки
 
-        -- Функция создания фрейма с драгом (локальная, использует hudScreenGui)
         local function CreateDraggableFrame(name, size, position, bgColor)
             local frame = Instance.new("Frame")
             frame.Name = name
@@ -709,28 +1085,31 @@ local function CreateMenu(options)
             return frame, registerDrag
         end
 
-        local function AddStrokeAndGlow(frame, strokeColor, glowColor)
+        local function AddStrokeAndGlow(frame)
             local stroke = Instance.new("UIStroke")
-            stroke.Color = strokeColor
+            stroke.Color = library.theme.G1
             stroke.Thickness = 1.5
             stroke.Parent = frame
+
             local glow = Instance.new("ImageLabel")
             glow.Name = "GlowShadow"
             glow.Position = UDim2.new(0, -15, 0, -15)
             glow.Size = UDim2.new(1, 30, 1, 30)
             glow.BackgroundTransparency = 1
             glow.Image = "rbxassetid://12974304856"
-            glow.ImageColor3 = glowColor
+            glow.ImageColor3 = library.theme.G1
             glow.ImageTransparency = 0.4
             glow.ScaleType = Enum.ScaleType.Slice
             glow.SliceCenter = Rect.new(20, 20, 100, 100)
             glow.ZIndex = 1
             glow.Parent = frame
+
+            return stroke, glow
         end
 
         -- ===== 1. WATERMARK =====
         local wmFrame, _ = CreateDraggableFrame("Watermark", UDim2.new(0, 100, 0, 32), UDim2.new(0, 20, 0, 20), Color3.fromRGB(10, 10, 12))
-        AddStrokeAndGlow(wmFrame, Color3.fromRGB(85, 30, 240), Color3.fromRGB(85, 30, 240))
+        local wmStroke, wmGlow = AddStrokeAndGlow(wmFrame)
 
         local wmText = Instance.new("TextLabel")
         wmText.AutomaticSize = Enum.AutomaticSize.XY
@@ -771,10 +1150,11 @@ local function CreateMenu(options)
                 wmFrame.Size = UDim2.new(0, targetWidth, 0, 32)
             end
         end)
+        table.insert(library._connections, wmConnection)
 
         -- ===== 2. TARGET HUD =====
         local targetFrame, _ = CreateDraggableFrame("Target", UDim2.new(0, 220, 0, 68), UDim2.new(0.5, -110, 0.6, 0), Color3.fromRGB(10, 10, 12))
-        AddStrokeAndGlow(targetFrame, Color3.fromRGB(85, 30, 240), Color3.fromRGB(85, 30, 240))
+        local targetStroke, targetGlow = AddStrokeAndGlow(targetFrame)
 
         local avatar = Instance.new("ImageLabel")
         avatar.Size = UDim2.new(0, 48, 0, 48)
@@ -827,11 +1207,10 @@ local function CreateMenu(options)
         grad.Color = ColorSequence.new(Color3.fromRGB(152, 69, 235), Color3.fromRGB(235, 78, 149))
         grad.Parent = hpFill
 
-        local targetPlayer = player -- текущая цель
+        local targetPlayer = player
         local function updateTarget(playerObj)
             targetPlayer = playerObj or player
             nameLabel.Text = targetPlayer.Name
-            -- Загружаем аватарку
             task.spawn(function()
                 local success, thumb = pcall(function()
                     return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
@@ -839,7 +1218,7 @@ local function CreateMenu(options)
                 if success and thumb then
                     avatar.Image = thumb
                 else
-                    avatar.Image = "rbxassetid://11189547379" -- заглушка
+                    avatar.Image = "rbxassetid://11189547379"
                 end
             end)
         end
@@ -865,14 +1244,15 @@ local function CreateMenu(options)
                 hpFill.Size = UDim2.new(0, 0, 1, 0)
             end
         end)
+        table.insert(library._connections, hpConnection)
 
         -- ===== 3. KEYBINDS =====
         local kbFrame, registerKbDrag = CreateDraggableFrame("Keybinds", UDim2.new(0, 165, 0, 42), UDim2.new(0, 20, 0, 100), Color3.fromRGB(10, 10, 12))
-        AddStrokeAndGlow(kbFrame, Color3.fromRGB(95, 35, 255), Color3.fromRGB(95, 35, 255))
+        local kbStroke, kbGlow = AddStrokeAndGlow(kbFrame)
 
         local header = Instance.new("Frame")
         header.Size = UDim2.new(1, 0, 0, 36)
-        header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)  -- ПРАВИЛО ГРАДИЕНТА
         header.BorderSizePixel = 0
         header.ZIndex = 6
         header.Parent = kbFrame
@@ -923,7 +1303,6 @@ local function CreateMenu(options)
         listPad.PaddingRight = UDim.new(0, 14)
         listPad.Parent = listContainer
 
-        -- Модули для Keybinds
         local modules = {
             G = {Name = "Fly", Active = false, Element = nil},
             H = {Name = "KillAura", Active = false, Element = nil},
@@ -941,6 +1320,7 @@ local function CreateMenu(options)
                 TS:Create(kbFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
                     Size = UDim2.new(0, 165, 0, targetHeight)
                 }):Play()
+                kbFrame.Visible = true
             else
                 kbFrame.Visible = false
             end
@@ -990,18 +1370,13 @@ local function CreateMenu(options)
                 toggleModule(keyStr)
             end
         end)
+        table.insert(library._connections, kbConnection)
 
-        -- Управление видимостью Keybinds
         local function updateKeybindsVisibility()
-            if library.flags.HUD_Keybinds then
-                kbFrame.Visible = true
-                updateKeybindsLayout()
-            else
-                kbFrame.Visible = false
-            end
+            updateKeybindsLayout()
         end
 
-        -- Экспортируем методы управления HUD
+        -- Экспортируем методы HUD
         library.hud = {
             setTarget = function(playerObj)
                 if not playerObj or not playerObj:IsA("Player") then return end
@@ -1019,415 +1394,38 @@ local function CreateMenu(options)
                 library.flags.HUD_Keybinds = (state ~= nil and state) or not library.flags.HUD_Keybinds
                 updateKeybindsVisibility()
             end,
+            updateTheme = function()
+                local color = library.theme.G1
+                for _, frame in ipairs({wmFrame, targetFrame, kbFrame}) do
+                    local stroke = frame:FindFirstChildWhichIsA("UIStroke")
+                    if stroke then stroke.Color = color end
+                    local glow = frame:FindFirstChild("GlowShadow")
+                    if glow then glow.ImageColor3 = color end
+                end
+            end,
             getWatermark = function() return wmFrame end,
             getTarget = function() return targetFrame end,
             getKeybinds = function() return kbFrame end,
         }
 
-        -- Устанавливаем флаги по умолчанию (включены)
         library.flags.HUD_Watermark = true
         library.flags.HUD_Target = true
         library.flags.HUD_Keybinds = true
 
-        -- Инициализируем видимость
         wmFrame.Visible = true
         targetFrame.Visible = true
         updateKeybindsVisibility()
+
+        -- Сохраняем ссылки для очистки
+        library._hudScreenGui = hudScreenGui
     end
 
     -- ============================================================
-    --  РАСШИРЯЕМ AddSettingsTab ДОБАВЛЕНИЕМ МОДУЛЯ HUD
-
-    
-    -- Системная вкладка "Settings"
-    local function AddSettingsTab()
-        local settingsPage = AddTab("Settings", "rbxassetid://10734950309")
-        -- Скрываем кнопку Settings (она будет открываться через шестеренку)
-        if Pages["Settings"] then
-            Pages["Settings"].Btn.Visible = false
-        end
-
-        local SLayout = Instance.new("UIListLayout", settingsPage)
-        SLayout.Padding = UDim.new(0, 10)
-        SLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        SLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-        AddToggle(settingsPage, {
-            text = "Background Blur",
-            flag = "MenuBlur",
-            default = false,
-            callback = function(v)
-                local Lighting = game:GetService("Lighting")
-                local B = Lighting:FindFirstChild("MenuBlur") or Instance.new("BlurEffect", Lighting)
-                B.Name = "MenuBlur"
-                if v then
-                    B.Enabled = true
-                    TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = 18 }):Play()
-                else
-                    local CloseTween = TS:Create(B, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), { Size = 0 })
-                    CloseTween:Play()
-                    CloseTween.Completed:Connect(function()
-                        if not library.flags["MenuBlur"] then B.Enabled = false end
-                    end)
-                end
-            end
-        })
-
-        -- Waifu модуль (используем CreateModule как ты просил)
-        CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
-            section:AddDropdown({
-                text = "Character",
-                flag = "WaifuSelection",
-                options = { "None", "Mellstroy" },
-                default = "None",
-                callback = function(val)
-                    if val == "Mellstroy" and library.flags["Menu Waifu"] then
-                        WaifuImg.Image = GetMellstroy("mellstroy.png", "https://raw.githubusercontent.com/bron4ik/Uilib/main/mellstroy.png")
-                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
-                    else
-                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
-                    end
-                end
-            })
-        end)
-
-        -- Бинд для открытия меню
-        local BindBtn = Instance.new("TextButton", settingsPage)
-        BindBtn.Size = UDim2.new(1, -10, 0, 30)
-        BindBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-        BindBtn.Text = "Menu Bind: " .. MenuKey.Name:upper()
-        BindBtn.TextColor3 = library.theme.G1   -- цвет будет обновляться при смене темы
-        BindBtn.Font = Enum.Font.GothamBold
-        BindBtn.TextSize = 13
-        Instance.new("UICorner", BindBtn)
-
-        -- Сохраняем ссылку на кнопку для обновления цвета при смене темы
-        BindBtnRef = BindBtn
-
-        table.insert(ActiveGradients, { Object = BindBtn, Type = "Slider" })
-
-        local isBinding = false
-        BindBtn.MouseButton1Click:Connect(function()
-            isBinding = true
-            BindBtn.Text = "..."
-        end)
-
-        UIS.InputBegan:Connect(function(i, g)
-            if g then return end
-            if isBinding then
-                MenuKey = i.KeyCode
-                BindBtn.Text = "Menu Bind: " .. i.KeyCode.Name:upper()
-                BindBtn.TextColor3 = library.theme.G1  -- обновляем цвет при установке бинда
-                isBinding = false
-                return
-            end
-            -- Обработка нажатия клавиши для открытия/закрытия меню
-            if i.KeyCode == MenuKey then
-                ToggleMenu()
-            end
-        end)
-
-        return settingsPage
-    end
-
-    -- Системная вкладка "Themes"
-    local function AddThemesTab()
-        local themesPage = AddTab("Themes", "rbxassetid://78489916461314", true)
-
-        local ThemeGrid = themesPage:WaitForChild("UIGridLayout")
-        ThemeGrid.CellSize = UDim2.new(0, 100, 0, 40)
-        ThemeGrid.CellPadding = UDim2.new(0, 10, 0, 10)
-        ThemeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-        local AvailableThemes = {
-            ["Celestial"] = { G1 = Color3.fromRGB(180, 40, 40), G2 = Color3.fromRGB(40, 80, 200) },
-            ["Vape"] = { G1 = Color3.fromRGB(0, 255, 200), G2 = Color3.fromRGB(0, 150, 255) },
-            ["Emerald"] = { G1 = Color3.fromRGB(40, 200, 80), G2 = Color3.fromRGB(20, 100, 40) },
-            ["Amethyst"] = { G1 = Color3.fromRGB(150, 50, 250), G2 = Color3.fromRGB(70, 20, 150) },
-            ["Sunrise"] = { G1 = Color3.fromRGB(255, 150, 50), G2 = Color3.fromRGB(200, 50, 50) }
-        }
-
-        for name, colors in pairs(AvailableThemes) do
-            local TBtn = Instance.new("TextButton", themesPage)
-            TBtn.Name = name
-            TBtn.Text = name:upper()
-            TBtn.TextColor3 = Color3.new(1, 1, 1)
-            TBtn.Font = Enum.Font.GothamBold
-            TBtn.TextSize = 10
-            TBtn.BackgroundColor3 = Color3.new(1, 1, 1)
-            TBtn.AutoButtonColor = false
-            Instance.new("UICorner", TBtn).CornerRadius = UDim.new(0, 6)
-            local Grad = Instance.new("UIGradient", TBtn)
-            Grad.Color = ColorSequence.new(colors.G1, colors.G2)
-            Grad.Rotation = 45
-
-            TBtn.MouseButton1Click:Connect(function()
-                library.theme = colors
-                -- Обновляем все градиенты и элементы
-                for _, data in pairs(ActiveGradients) do
-                    if typeof(data) == "Instance" then
-                        data.Color = ColorSequence.new(colors.G1, colors.G2)
-                    elseif type(data) == "table" then
-                        if data.Type == "Toggle" then
-                            if library.flags[data.Flag] then
-                                TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
-                            end
-                        elseif data.Type == "Slider" then
-                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
-                        end
-                    end
-                end
-                -- Обновляем цвет текста кнопки бинда
-                if BindBtnRef then
-                    BindBtnRef.TextColor3 = colors.G1
-                end
-                CreateNotify("Celestial", "Тема [" .. name .. "] применена мгновенно!", 2)
-            end)
-        end
-
-        return themesPage
-    end
-
-    -- ------------------------------------------------------------------------
-    -- Построение GUI (базовая структура без табов)
-    -- ------------------------------------------------------------------------
-    local function BuildMenu()
-        local MenuName = "Celestial"
-        if CoreGui:FindFirstChild(MenuName) then CoreGui[MenuName]:Destroy() end
-
-        ScreenGui = Instance.new("ScreenGui", CoreGui)
-        ScreenGui.Name = MenuName
-        ScreenGui.IgnoreGuiInset = true
-
-        ActiveGradients = {}
-
-        Main = Instance.new("Frame", ScreenGui)
-        Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-        Main.Size = UDim2.new(0, 700, 0, 0)
-        Main.Position = UDim2.new(0.5, -350, 0.5, 0)
-        Main.Active = true
-        Main.Draggable = true
-        Main.Visible = false
-        Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
-        Instance.new("UIStroke", Main).Color = Color3.fromRGB(45, 45, 50)
-
-        -- Sidebar
-        Sidebar = Instance.new("Frame", Main)
-        Sidebar.Size = UDim2.new(0, 180, 1, 0)
-        Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-        Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 12)
-
-        local Logo = Instance.new("TextLabel", Sidebar)
-        Logo.Text = MenuName
-        Logo.Size = UDim2.new(1, 0, 0, 60)
-        Logo.BackgroundTransparency = 1
-        Logo.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Logo.Font = Enum.Font.GothamBold
-        Logo.TextSize = 22
-
-        BtnList = Instance.new("Frame", Sidebar)
-        BtnList.Position = UDim2.new(0, 0, 0, 70)
-        BtnList.Size = UDim2.new(1, 0, 1, -120)
-        BtnList.BackgroundTransparency = 1
-        Instance.new("UIListLayout", BtnList).Padding = UDim.new(0, 5)
-        BtnList.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-        Content = Instance.new("Frame", Main)
-        Content.Position = UDim2.new(0, 195, 0, 20)
-        Content.Size = UDim2.new(1, -215, 1, -40)
-        Content.BackgroundTransparency = 1
-
-        BottomList = Instance.new("Frame", Sidebar)
-        BottomList.Size = UDim2.new(1, 0, 0, 100)
-        BottomList.Position = UDim2.new(0, 0, 1, -110)
-        BottomList.BackgroundTransparency = 1
-        local BLayout = Instance.new("UIListLayout", BottomList)
-        BLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        BLayout.Padding = UDim.new(0, 5)
-        BLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-        Pages = {}
-
-        -- Кнопка выхода (Unload) всегда внизу
-        local UnloadBtn = Instance.new("TextButton", BottomList)
-        UnloadBtn.Size = UDim2.new(0, 160, 0, 38)
-        UnloadBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-        UnloadBtn.Text = "          Выйти"
-        UnloadBtn.TextColor3 = Color3.fromRGB(200, 50, 50)
-        UnloadBtn.Font = Enum.Font.GothamBold
-        UnloadBtn.TextSize = 13
-        UnloadBtn.TextXAlignment = Enum.TextXAlignment.Left
-        Instance.new("UICorner", UnloadBtn)
-        local UnloadIcon = Instance.new("ImageLabel", UnloadBtn)
-        UnloadIcon.Size = UDim2.new(0, 18, 0, 18)
-        UnloadIcon.Position = UDim2.new(0, 12, 0.5, -9)
-        UnloadIcon.BackgroundTransparency = 1
-        UnloadIcon.Image = "rbxassetid://10723356507"
-        UnloadIcon.ImageColor3 = Color3.fromRGB(200, 50, 50)
-
-        UnloadBtn.MouseButton1Click:Connect(function()
-            library.Unload()
-        end)
-
-        -- Шестеренка (открывает вкладку Settings, если она есть)
-        local GearBtn = Instance.new("ImageButton", Main)
-        GearBtn.Size = UDim2.new(0, 20, 0, 20)
-        GearBtn.Position = UDim2.new(1, -30, 0, 10)
-        GearBtn.BackgroundTransparency = 1
-        GearBtn.Image = "rbxassetid://10734950309"
-        GearBtn.ImageColor3 = Color3.fromRGB(200, 200, 200)
-
-        GearBtn.MouseButton1Click:Connect(function()
-            if Pages and Pages["Settings"] then
-                for _, v in pairs(Pages) do
-                    v.Page.Visible = false
-                    v.Btn.TextColor3 = Color3.fromRGB(140, 140, 140)
-                    v.Icon.ImageColor3 = Color3.fromRGB(140, 140, 140)
-                    v.Grad.Enabled = false
-                end
-                local settings = Pages["Settings"]
-                settings.Page.Visible = true
-                settings.Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                settings.Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-                settings.Grad.Enabled = true
-            else
-                CreateNotify("Celestial", "Вкладка Settings не найдена", 2)
-            end
-        end)
-
-        -- Waifu GUI (создаётся всегда)
-        WaifuGui = Instance.new("ScreenGui", CoreGui)
-        WaifuGui.Name = "CelestialWaifu"
-        WaifuGui.DisplayOrder = -1
-        WaifuImg = Instance.new("ImageLabel", WaifuGui)
-        WaifuImg.Name = "WaifuDisplay"
-        WaifuImg.Size = UDim2.new(0.4, 0, 0.6, 0)
-        WaifuImg.Position = UDim2.new(1, 0, 1, 0)
-        WaifuImg.AnchorPoint = Vector2.new(1, 1)
-        WaifuImg.BackgroundTransparency = 1
-        WaifuImg.ImageTransparency = 1
-        WaifuImg.ScaleType = Enum.ScaleType.Fit
-
-        -- Функция переключения меню
-        function ToggleMenu()
-            library._menuOpen = not library._menuOpen
-
-            if library._menuOpen then
-                if library.flags["Menu Waifu"] then
-                    if library.flags["WaifuSelection"] == "Mellstroy" then
-                        TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 0.1 }):Play()
-                    end
-                end
-                local blurFlag = library.flags["MenuBlur"]
-                local Lighting = game:GetService("Lighting")
-                local bEffect = Lighting:FindFirstChild("MenuBlur")
-                if blurFlag then
-                    if not bEffect then
-                        bEffect = Instance.new("BlurEffect", Lighting)
-                        bEffect.Name = "MenuBlur"
-                    end
-                    bEffect.Enabled = true
-                    TS:Create(bEffect, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Size = 18 }):Play()
-                end
-
-                Main.Visible = true
-                TS:Create(Main, TweenInfo.new(0.6, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-                    Size = UDim2.new(0, 700, 0, 500),
-                    Position = UDim2.new(0.5, -350, 0.5, -250),
-                    BackgroundTransparency = 0
-                }):Play()
-            else
-                local bEffect = game:GetService("Lighting"):FindFirstChild("MenuBlur")
-                if bEffect then
-                    TS:Create(bEffect, TweenInfo.new(0.3), { Size = 0 }):Play()
-                    task.delay(0.3, function()
-                        if not library._menuOpen then bEffect.Enabled = false end
-                    end)
-                end
-
-                for _, v in pairs(Main:GetChildren()) do
-                    if v:IsA("Frame") and v.Name:find("SWindow") then v.Visible = false end
-                end
-
-                local CloseTween = TS:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-                    Size = UDim2.new(0, 700, 0, 0),
-                    Position = UDim2.new(0.5, -350, 0.5, 0),
-                    BackgroundTransparency = 1
-                })
-                CloseTween:Play()
-                CloseTween.Completed:Connect(function()
-                    if not library._menuOpen then
-                        Main.Visible = false
-                        -- Сбрасываем фокус, чтобы клавиша срабатывала снова
-                        library._menuOpen = false
-                    end
-                end)
-                TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
-            end
-        end
-
-        -- Возвращаем методы для библиотеки
-        return {
-            AddTab = AddTab,
-            AddToggle = AddToggle,
-            AddSlider = AddSlider,
-            AddColorPicker = AddColorPicker,
-            AddDropdown = AddDropdown,
-            CreateModule = CreateModule,
-            AddSettingsTab = AddSettingsTab,
-            AddThemesTab = AddThemesTab,
-            ToggleMenu = ToggleMenu,
-            SetMenuKey = function(key)
-                MenuKey = key
-                if BindBtnRef then
-                    BindBtnRef.Text = "Menu Bind: " .. key.Name:upper()
-                    BindBtnRef.TextColor3 = library.theme.G1
-                end
-            end,
-            GetFlags = function() return library.flags end,
-            GetTheme = function() return library.theme end,
-            SetTheme = function(colors)
-                library.theme = colors
-                -- Обновляем все активные градиенты
-                for _, data in pairs(ActiveGradients) do
-                    if typeof(data) == "Instance" then
-                        data.Color = ColorSequence.new(colors.G1, colors.G2)
-                    elseif type(data) == "table" then
-                        if data.Type == "Toggle" then
-                            if library.flags[data.Flag] then
-                                TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
-                            end
-                        elseif data.Type == "Slider" then
-                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
-                        end
-                    end
-                end
-                if BindBtnRef then
-                    BindBtnRef.TextColor3 = colors.G1
-                end
-                CreateNotify("Celestial", "Тема обновлена", 1)
-            end,
-            Notify = CreateNotify,
-            Unload = function()
-                local Lighting = game:GetService("Lighting")
-                local bEffect = Lighting:FindFirstChild("MenuBlur")
-                if bEffect then bEffect:Destroy() end
-                if WaifuGui then WaifuGui:Destroy() end
-                for flag, _ in pairs(library.flags) do
-                    library.flags[flag] = false
-                end
-                if ScreenGui then ScreenGui:Destroy() end
-                library._menuOpen = false
-            end,
-        }
-    end
-    
-    -- Сохраняем оригинальный метод
+    -- РАСШИРЯЕМ AddSettingsTab ДОБАВЛЕНИЕМ МОДУЛЯ HUD
+    -- ============================================================
     local originalAddSettingsTab = AddSettingsTab
     function AddSettingsTab()
-        local settingsPage = originalAddSettingsTab() -- создаёт базовые настройки (Blur, Waifu, Bind)
-
-        -- Добавляем модуль HUD
+        local settingsPage = originalAddSettingsTab()
         CreateModule(settingsPage, "HUD Elements", "Управление интерфейсом", function(section)
             section:AddToggle({
                 text = "Показывать Watermark",
@@ -1462,9 +1460,7 @@ local function CreateMenu(options)
                     if val == "Локальный игрок" then
                         library.hud.setTarget(player)
                     elseif val == "Ближайший игрок" then
-                        -- Реализация поиска ближайшего игрока (упрощённо)
-                        local closest = nil
-                        local minDist = math.huge
+                        local closest, minDist = nil, math.huge
                         for _, plr in ipairs(Players:GetPlayers()) do
                             if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
                                 local dist = (plr.Character.HumanoidRootPart.Position - (player.Character and player.Character.HumanoidRootPart and player.Character.HumanoidRootPart.Position or Vector3.zero)).Magnitude
@@ -1474,11 +1470,7 @@ local function CreateMenu(options)
                                 end
                             end
                         end
-                        if closest then
-                            library.hud.setTarget(closest)
-                        else
-                            library.hud.setTarget(player)
-                        end
+                        library.hud.setTarget(closest or player)
                     elseif val == "Первый в списке" then
                         local first = nil
                         for _, plr in ipairs(Players:GetPlayers()) do
@@ -1492,11 +1484,12 @@ local function CreateMenu(options)
                 end
             })
         end)
-
         return settingsPage
     end
 
-
+    -- ============================================================
+    -- ЗАГРУЗЧИК
+    -- ============================================================
     local function RunLoader(callback)
         local LoaderGui = Instance.new("ScreenGui", CoreGui)
         LoaderGui.Name = "CelestialLoader"
@@ -1589,18 +1582,17 @@ local function CreateMenu(options)
         LoaderGui:Destroy()
         callback()
     end
-    
+
     -- ============================================================
-    --  ЗАПУСК БИБЛИОТЕКИ И HUD
+    -- ЗАПУСК
     -- ============================================================
     local function start()
-        local menuMethods = BuildMenu() -- строит основное меню
+        local menuMethods = BuildMenu()
         for k, v in pairs(menuMethods) do
             library[k] = v
         end
         library._menuOpen = false
 
-        -- Запускаем HUD после создания GUI
         setupHUD()
 
         CreateNotify("Celestial", "Меню и HUD загружены! Нажмите " .. MenuKey.Name:upper() .. " для открытия.", 4)
