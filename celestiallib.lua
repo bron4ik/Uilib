@@ -1039,181 +1039,156 @@ local function CreateMenu(options)
             })--]]
         end)
 
-        -- ============================================================
-        -- МОДУЛЬ КОНФИГУРАЦИЙ (Путь: Celestial/Configs)
-        -- ============================================================
+        local baseFolder = "Celestial"
+        local configFolder = "Celestial/Configs"
+        
         CreateModule(settingsPage, "Configuration", "Управление сохранениями", function(section)
-            
-            -- Главный путь к папке с конфигами
-            local baseFolder = "Celestial"
-            local configFolder = "Celestial/Configs"
-    
-            -- 1. Выпадающее меню со списком доступных файлов конфигов
+        
+            -- 1. ВЫПАДАЮЩИЙ СПИСОК (Dropdown)
             local configDropdown = section:AddDropdown({
-                text = "Выбрать конфиг",
+                text = "Выбрать слот конфига",
                 flag = "SelectedConfig",
-                options = {}, 
-                default = ""
+                options = {"celestial1", "celestial2", "celestial3", "celestial4", "celestial5"},
+                default = "celestial1"
             })
-    
-            -- Вспомогательная функция для сканирования и обновления списка файлов
+        
+            -- Вспомогательная функция для обновления визуального списка файлов
             local function refreshConfigList()
-                -- Проверяем и создаем структуру папок (сначала корень, потом подпапку)
                 if not isfolder(baseFolder) then makefolder(baseFolder) end
                 if not isfolder(configFolder) then makefolder(configFolder) end
                 
-                local files = listfiles(configFolder)
-                local options = {}
+                -- Списки слотов всегда статичны от 1 до 5
+                local slots = {"celestial1", "celestial2", "celestial3", "celestial4", "celestial5"}
                 
-                for _, filePath in ipairs(files) do
-                    -- Вырезаем чистое имя файла (например, "Celestial/Configs/legit.json" -> "legit")
-                    local fileName = filePath:match("([^/]+)%.json$") or filePath:match("([^/]+)$")
-                    if fileName then
-                        table.insert(options, fileName)
+                -- Показываем пользователю, какие слоты уже заняты файлами на диске
+                for i, slotName in ipairs(slots) do
+                    local path = configFolder .. "/" .. slotName .. ".json"
+                    if isfile(path) then
+                        slots[i] = slotName .. " [Занят]"
+                    else
+                        slots[i] = slotName .. " [Пусто]"
                     end
                 end
                 
-                if #options == 0 then table.insert(options, "Нет конфигов") end
-                configDropdown:SetOptions(options)
+                if configDropdown and configDropdown.SetOptions then
+                    pcall(function() configDropdown:SetOptions(slots) end)
+                end
             end
-    
-            -- 2. Кнопка REFRESH (Обновить список)
-            section:AddButton({
-                text = "Обновить список",
-                callback = function()
-                    refreshConfigList()
-                    library.Notify("Celestial", "Список конфигураций обновлен!", 2)
-                end
-            })
-    
-            -- 3. Кнопка SAVE (Перезаписать текущие настройки в уже выбранный файл)
-            section:AddButton({
-                text = "Сохранить в выбранный",
-                callback = function()
-                    local selected = library.flags.SelectedConfig
-                    if not selected or selected == "" or selected == "Нет конфигов" then
-                        library.Notify("Error", "Сначала выберите конфиг для перезаписи!", 3)
-                        return
-                    end
-    
-                    if not isfolder(baseFolder) then makefolder(baseFolder) end
-                    if not isfolder(configFolder) then makefolder(configFolder) end
-                    
-                    local HttpService = game:GetService("HttpService")
-                    local success, encoded = pcall(function() return HttpService:JSONEncode(library.flags) end)
-                    
-                    if success then
-                        writefile(configFolder .. "/" .. selected .. ".json", encoded)
-                        library.Notify("Celestial", "Конфиг '" .. selected .. "' успешно перезаписан!", 3)
+        
+            -- Вспомогательная функция для очистки имени слота от меток типа "[Занят]"
+            local function getCleanSlotName()
+                local selected = library.flags.SelectedConfig or "celestial1"
+                -- Вырезаем чистый текст до первого пробела ("celestial1 [Занят]" -> "celestial1")
+                local cleanName = selected:match("^([^%s]+)") or "celestial1"
+                return cleanName
+            end
+        
+            -- 2. ТОГГЛ-КНОПКА REFRESH (Обновить список)
+            local refreshToggle
+            refreshToggle = section:AddToggle({
+                text = "Обновить статус слотов",
+                flag = "Btn_Refresh",
+                default = false,
+                callback = function(v)
+                    if v then
                         refreshConfigList()
-                    else
-                        library.Notify("Error", "Не удалось закодировать настройки!", 3)
+                        if library.Notify then library.Notify("Celestial", "Статус слотов обновлен!", 2) end
+                        pcall(function() refreshToggle:Set(false) end)
                     end
                 end
             })
-    
-            -- 4. Кнопка CREATE NEW (Создать абсолютно новый файл с кастомным именем)
-            section:AddButton({
-                text = "Создать новый конфиг",
-                callback = function()
-                    -- Для ввода кастомного имени читаем флаг из текстбокса. 
-                    -- Если он пустой, запрашиваем ввод через стандартное окно Roblox или ставим дефолт.
-                    local newName = library.flags.NewConfigNameInput or ""
-                    newName = newName:gsub("%s+", "") -- Вырезаем пробелы, чтобы имя файла не ломалось
-                    
-                    if newName == "" then
-                        library.Notify("Error", "Введите имя для нового конфига в текстовое поле!", 3)
-                        return
-                    end
-    
-                    if not isfolder(baseFolder) then makefolder(baseFolder) end
-                    if not isfolder(configFolder) then makefolder(configFolder) end
-                    
-                    local path = configFolder .. "/" .. newName .. ".json"
-                    if isfile(path) then
-                        library.Notify("Error", "Конфиг с таким именем уже существует!", 3)
-                        return
-                    end
-                    
-                    local HttpService = game:GetService("HttpService")
-                    local success, encoded = pcall(function() return HttpService:JSONEncode(library.flags) end)
-                    
-                    if success then
-                        writefile(path, encoded)
-                        library.Notify("Celestial", "Новый конфиг '" .. newName .. "' успешно создан!", 3)
-                        refreshConfigList()
+        
+            -- 3. ТОГГЛ-КНОПКА SAVE/CREATE (Сохранить/Перезаписать в выбранный слот)
+            local saveToggle
+            saveToggle = section:AddToggle({
+                text = "Сохранить в выбранный слот",
+                flag = "Btn_Save",
+                default = false,
+                callback = function(v)
+                    if v then
+                        local slotName = getCleanSlotName()
+        
+                        if not isfolder(baseFolder) then makefolder(baseFolder) end
+                        if not isfolder(configFolder) then makefolder(configFolder) end
                         
-                        -- Визуально переключаем дропдаун на только что созданный файл
-                        if configDropdown and configDropdown.Set then
-                            pcall(function() configDropdown:Set(newName) end)
-                        end
-                    else
-                        library.Notify("Error", "Не удалось закодировать настройки!", 3)
-                    end
-                end
-            })
-
-    
-            -- 4. Кнопка LOAD (Загрузить выбранный файл)
-            section:AddButton({
-                text = "Загрузить выбранный",
-                callback = function()
-                    local selected = library.flags.SelectedConfig
-                    
-                    if not selected or selected == "" or selected == "Нет конфигов" then
-                        library.Notify("Error", "Сначала выберите конфиг из списка!", 3)
-                        return
-                    end
-                    
-                    local path = configFolder .. "/" .. selected .. ".json"
-                    if isfile(path) then
-                        local content = readfile(path)
                         local HttpService = game:GetService("HttpService")
-                        local success, decoded = pcall(function() return HttpService:JSONDecode(content) end)
+                        local success, encoded = pcall(function() return HttpService:JSONEncode(library.flags) end)
                         
-                        if success and type(decoded) == "table" then
-                            -- Применяем сохраненные флаги
-                            for flag, value in pairs(decoded) do
-                                library.flags[flag] = value
-                                -- Обновляем визуальное состояние кнопок/слайдеров в меню
-                                local element = library.modules[flag]
-                                if element and element.Set then
-                                    pcall(function() element:Set(value) end)
-                                end
-                            end
-                            library.Notify("Celestial", "Конфиг '" .. selected .. "' успешно загружен!", 3)
+                        if success then
+                            writefile(configFolder .. "/" .. slotName .. ".json", encoded)
+                            if library.Notify then library.Notify("Celestial", "Конфиг сохранен в слот " .. slotName .. "!", 3) end
+                            refreshConfigList()
                         else
-                            library.Notify("Error", "Файл конфигурации поврежден!", 3)
+                            if library.Notify then library.Notify("Error", "Не удалось закодировать настройки!", 3) end
                         end
-                    else
-                        library.Notify("Error", "Файл не найден на диске!", 3)
+                        pcall(function() saveToggle:Set(false) end)
                     end
                 end
             })
-    
-            -- 5. Кнопка DELETE (Удалить файл с диска)
-            section:AddButton({
-                text = "Удалить выбранный",
-                callback = function()
-                    local selected = library.flags.SelectedConfig
-                    
-                    if not selected or selected == "" or selected == "Нет конфигов" then
-                        library.Notify("Error", "Нечего удалять!", 3)
-                        return
-                    end
-                    
-                    local path = configFolder .. "/" .. selected .. ".json"
-                    if isfile(path) then
-                        delfile(path)
-                        library.Notify("Celestial", "Конфиг '" .. selected .. "' удален из памяти.", 3)
-                        refreshConfigList()
+        
+            -- 4. ТОГГЛ-КНОПКА LOAD (Загрузить из выбранного слота)
+            local loadToggle
+            loadToggle = section:AddToggle({
+                text = "Загрузить из слота",
+                flag = "Btn_Load",
+                default = false,
+                callback = function(v)
+                    if v then
+                        local slotName = getCleanSlotName()
+                        local path = configFolder .. "/" .. slotName .. ".json"
+                        
+                        if isfile(path) then
+                            local content = readfile(path)
+                            local HttpService = game:GetService("HttpService")
+                            local success, decoded = pcall(function() return HttpService:JSONDecode(content) end)
+                            
+                            if success and type(decoded) == "table" then
+                                for flag, value in pairs(decoded) do
+                                    library.flags[flag] = value
+                                    local element = library.modules[flag]
+                                    if element and element.Set then
+                                        pcall(function() element:Set(value) end)
+                                    end
+                                end
+                                if library.Notify then library.Notify("Celestial", "Конфиг " .. slotName .. " успешно загружен!", 3) end
+                            else
+                                if library.Notify then library.Notify("Error", "Файл слота поврежден!", 3) end
+                            end
+                        else
+                            if library.Notify then library.Notify("Error", "Этот слот еще пустой!", 3) end
+                        end
+                        pcall(function() loadToggle:Set(false) end)
                     end
                 end
             })
-    
-            -- Первичный скан папки при инициализации меню
+        
+            -- 5. ТОГГЛ-КНОПКА DELETE (Очистить слот)
+            local deleteToggle
+            deleteToggle = section:AddToggle({
+                text = "Очистить выбранный слот",
+                flag = "Btn_Delete",
+                default = false,
+                callback = function(v)
+                    if v then
+                        local slotName = getCleanSlotName()
+                        local path = configFolder .. "/" .. slotName .. ".json"
+                        
+                        if isfile(path) then
+                            delfile(path)
+                            if library.Notify then library.Notify("Celestial", "Слот " .. slotName .. " успешно очищен.", 3) end
+                            refreshConfigList()
+                        else
+                            if library.Notify then library.Notify("Error", "Слот и так пустой!", 3) end
+                        end
+                        pcall(function() deleteToggle:Set(false) end)
+                    end
+                end
+            })
+        
+            -- Первичный скан папки при создании меню для отображения [Занят] / [Пусто]
             task.spawn(refreshConfigList)
-        end)   
+        end)
+
         return settingsPage
     end
 
