@@ -1098,7 +1098,7 @@ local function CreateMenu(options)
                 end
             })
         
-            -- 3. ТОГГЛ-КНОПКА SAVE/CREATE (Сохранить/Перезаписать в выбранный слот)
+            -- 3. ТОГГЛ-КНОПКА SAVE/CREATE (Сохранение с принудительной записью биндов)
             local saveToggle
             saveToggle = section:AddToggle({
                 text = "Сохранить в выбранный слот",
@@ -1111,22 +1111,42 @@ local function CreateMenu(options)
                         if not isfolder(baseFolder) then makefolder(baseFolder) end
                         if not isfolder(configFolder) then makefolder(configFolder) end
                         
+                        -- ХАРДКОРНЫЙ ФИКС: Перед сохранением пакуем все бинды и статусы модулей в flags
+                        if library.modules then
+                            for modName, modData in pairs(library.modules) do
+                                if type(modData) == "table" then
+                                    -- Сохраняем саму назначенную клавишу (Keybind)
+                                    if modData.Key then
+                                        library.flags["Bind_" .. modName] = modData.Key.Name
+                                    elseif modData.CurrentBind then
+                                        library.flags["Bind_" .. modName] = modData.CurrentBind
+                                    end
+                                    -- Сохраняем статус самого модуля (включен/выключен)
+                                    if modData.Active ~= nil then
+                                        library.flags["Status_" .. modName] = modData.Active
+                                    end
+                                end
+                            end
+                        end
+        
                         local HttpService = game:GetService("HttpService")
                         local success, encoded = pcall(function() return HttpService:JSONEncode(library.flags) end)
                         
                         if success then
                             writefile(configFolder .. "/" .. slotName .. ".json", encoded)
-                            if library.Notify then library.Notify("Celestial", "Конфиг сохранен в слот " .. slotName .. "!", 3) end
+                            if library.Notify then library.Notify("Celestial", "Конфиг + бинды сохранены в слот " .. slotName .. "!", 3) end
                             refreshConfigList()
                         else
                             if library.Notify then library.Notify("Error", "Не удалось закодировать настройки!", 3) end
                         end
-                        pcall(function() saveToggle:Set(false) end)
+                        
+                        pcall(function() if saveToggle.set then saveToggle:set(false) else saveToggle:Set(false) end end)
                     end
                 end
             })
+
         
-            -- 4. ТОГГЛ-КНОПКА LOAD (Загрузить из выбранного слота — ИСПРАВЛЕННАЯ ВЕРСИЯ)
+            -- 4. ТОГГЛ-КНОПКА LOAD (Загрузка флагов, биндов и статусов окон HUD)
             local loadToggle
             loadToggle = section:AddToggle({
                 text = "Загрузить из слота",
@@ -1143,40 +1163,60 @@ local function CreateMenu(options)
                             local success, decoded = pcall(function() return HttpService:JSONDecode(content) end)
                             
                             if success and type(decoded) == "table" then
-                                -- Сначала принудительно накатываем все значения флагов в память
+                                -- 1. Накатываем сырые флаги в память
                                 for flag, value in pairs(decoded) do
                                     library.flags[flag] = value
                                 end
                                 
-                                -- Теперь отдельно и безопасно пытаемся обновить визуал кнопок в меню
+                                -- 2. Безопасно обновляем стандартный визуал элементов в меню
                                 for flag, value in pairs(decoded) do
-                                    -- Ищем объект элемента во всех возможных таблицах либки
                                     local element = (library.modules and library.modules[flag]) 
-                                                 or (library.Elements and library.Elements[flag]) 
-                                                 or (library.Objects and library.Objects[flag])
-                                    
-                                    if element then
-                                        pcall(function()
-                                            -- Перебираем все варианты названия функций обновления в разных UI-либах
-                                            if element.Set then 
-                                                element:Set(value)
-                                            elseif element.set then 
-                                                element:set(value)
-                                            elseif element.SetValue then 
-                                                element:SetValue(value)
-                                            elseif element.setvalue then 
-                                                element:setvalue(value)
-                                            elseif type(element) == "table" then
-                                                -- Если это прямой флаг-функция
-                                                element[flag] = value
-                                            end
-                                        end)
+                                                 or (library.Elements and library.Elements[flag])
+                                    if element and (element.Set or element.set) then
+                                        pcall(function() if element.set then element:set(value) else element:Set(value) end end)
                                     end
                                 end
                                 
-                                if library.Notify then 
-                                    library.Notify("Celestial", "Конфиг " .. slotName .. " успешно загружен!", 3) 
+                                -- 3. ХАРДКОРНЫЙ ФИКС: Восстанавливаем бинды и включаем модули на HUD
+                                if library.modules then
+                                    for modName, modData in pairs(library.modules) do
+                                        if type(modData) == "table" then
+                                            -- Восстанавливаем клавишу бинда из файла
+                                            local savedBind = decoded["Bind_" .. modName]
+                                            if savedBind and savedBind ~= "None" then
+                                                pcall(function()
+                                                    local keyCodeEnum = Enum.KeyCode[savedBind]
+                                                    if modData.UpdateBind then
+                                                        modData:UpdateBind(keyCodeEnum)
+                                                    elseif modData.SetBind then
+                                                        modData:SetBind(keyCodeEnum)
+                                                    else
+                                                        modData.Key = keyCodeEnum
+                                                    end
+                                                end)
+                                            end
+                                            
+                                            -- Восстанавливаем статус активации (вкл/выкл) и пушим в HUD Кейбиндов!
+                                            local savedStatus = decoded["Status_" .. modName]
+                                            if savedStatus ~= nil then
+                                                modData.Active = savedStatus
+                                                -- Если у модуля в либке есть кнопка визуального переключателя, меняем её
+                                                if modData.ToggleInstance and (modData.ToggleInstance.Set or modData.ToggleInstance.set) then
+                                                    pcall(function() if modData.ToggleInstance.set then modData.ToggleInstance:set(savedStatus) else modData.ToggleInstance:Set(savedStatus) end end)
+                                                end
+                                                
+                                                -- Принудительно вызываем обновление макета нашего Keybinds HUD
+                                                if _G.UpdateCelestialKeybindsLayout then
+                                                    pcall(_G.UpdateCelestialKeybindsLayout)
+                                                elseif library._updateKeybindsHUD then
+                                                    pcall(library._updateKeybindsHUD)
+                                                end
+                                            end
+                                        end
+                                    end
                                 end
+                                
+                                if library.Notify then library.Notify("Celestial", "Конфиг и Бинды успешно загружены!", 3) end
                             else
                                 if library.Notify then library.Notify("Error", "Файл слота поврежден!", 3) end
                             end
@@ -1184,17 +1224,11 @@ local function CreateMenu(options)
                             if library.Notify then library.Notify("Error", "Этот слот еще пустой!", 3) end
                         end
                         
-                        -- Безопасный сброс галочки тоггла-кнопки
-                        pcall(function() 
-                            if loadToggle and loadToggle.Set then 
-                                loadToggle:Set(false) 
-                            elseif loadToggle and loadToggle.set then 
-                                loadToggle:set(false) 
-                            end 
-                        end)
+                        pcall(function() if loadToggle.set then loadToggle:set(false) else loadToggle:Set(false) end end)
                     end
                 end
             })
+
 
         
             -- 5. ТОГГЛ-КНОПКА DELETE (Очистить слот)
