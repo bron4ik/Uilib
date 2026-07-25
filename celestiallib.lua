@@ -1,8 +1,8 @@
 -- Celestial UI Library (аналог Linoria, но кастомный)
 -- Использование:
--- local lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/your-repo/celestial.lua"))({ showLoader = true })
--- lib.AddTab("Combat", "rbxassetid://...")
--- lib.AddToggle(tab, { ... })
+-- local lib = loadstring(game:HttpGet("..."))({ showLoader = true })
+-- local combat = lib.AddTab("Combat", "rbxassetid://...")
+-- lib.AddToggle(combat, { ... })
 
 local function CreateMenu(options)
     options = options or {}
@@ -49,7 +49,7 @@ local function CreateMenu(options)
     local ScreenGui, Main, Sidebar, Content, BottomList, Pages, ActiveGradients
     local WaifuGui, WaifuImg
     local MenuKey = Enum.KeyCode.RightShift
-    local loaded = false
+    local BindBtnRef = nil  -- ссылка на кнопку бинда для обновления цвета
 
     -- Уведомления
     local function CreateNotify(title, text, duration)
@@ -649,7 +649,7 @@ local function CreateMenu(options)
             end
         })
 
-        -- Waifu модуль
+        -- Waifu модуль (используем CreateModule как ты просил)
         CreateModule(settingsPage, "Menu Waifu", "Отображение вайфу в углу", function(section)
             section:AddDropdown({
                 text = "Character",
@@ -672,10 +672,13 @@ local function CreateMenu(options)
         BindBtn.Size = UDim2.new(1, -10, 0, 30)
         BindBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
         BindBtn.Text = "Menu Bind: " .. MenuKey.Name:upper()
-        BindBtn.TextColor3 = library.theme.G1
+        BindBtn.TextColor3 = library.theme.G1   -- цвет будет обновляться при смене темы
         BindBtn.Font = Enum.Font.GothamBold
         BindBtn.TextSize = 13
         Instance.new("UICorner", BindBtn)
+
+        -- Сохраняем ссылку на кнопку для обновления цвета при смене темы
+        BindBtnRef = BindBtn
 
         table.insert(ActiveGradients, { Object = BindBtn, Type = "Slider" })
 
@@ -690,8 +693,13 @@ local function CreateMenu(options)
             if isBinding then
                 MenuKey = i.KeyCode
                 BindBtn.Text = "Menu Bind: " .. i.KeyCode.Name:upper()
+                BindBtn.TextColor3 = library.theme.G1  -- обновляем цвет при установке бинда
                 isBinding = false
                 return
+            end
+            -- Обработка нажатия клавиши для открытия/закрытия меню
+            if i.KeyCode == MenuKey then
+                ToggleMenu()
             end
         end)
 
@@ -731,6 +739,7 @@ local function CreateMenu(options)
 
             TBtn.MouseButton1Click:Connect(function()
                 library.theme = colors
+                -- Обновляем все градиенты и элементы
                 for _, data in pairs(ActiveGradients) do
                     if typeof(data) == "Instance" then
                         data.Color = ColorSequence.new(colors.G1, colors.G2)
@@ -743,6 +752,10 @@ local function CreateMenu(options)
                             TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
                         end
                     end
+                end
+                -- Обновляем цвет текста кнопки бинда
+                if BindBtnRef then
+                    BindBtnRef.TextColor3 = colors.G1
                 end
                 CreateNotify("Celestial", "Тема [" .. name .. "] применена мгновенно!", 2)
             end)
@@ -842,7 +855,6 @@ local function CreateMenu(options)
 
         GearBtn.MouseButton1Click:Connect(function()
             if Pages and Pages["Settings"] then
-                -- Открываем вкладку Settings
                 for _, v in pairs(Pages) do
                     v.Page.Visible = false
                     v.Btn.TextColor3 = Color3.fromRGB(140, 140, 140)
@@ -904,7 +916,9 @@ local function CreateMenu(options)
                 local bEffect = game:GetService("Lighting"):FindFirstChild("MenuBlur")
                 if bEffect then
                     TS:Create(bEffect, TweenInfo.new(0.3), { Size = 0 }):Play()
-                    task.delay(0.3, function() if not library._menuOpen then bEffect.Enabled = false end end)
+                    task.delay(0.3, function()
+                        if not library._menuOpen then bEffect.Enabled = false end
+                    end)
                 end
 
                 for _, v in pairs(Main:GetChildren()) do
@@ -918,7 +932,11 @@ local function CreateMenu(options)
                 })
                 CloseTween:Play()
                 CloseTween.Completed:Connect(function()
-                    if not library._menuOpen then Main.Visible = false end
+                    if not library._menuOpen then
+                        Main.Visible = false
+                        -- Сбрасываем фокус, чтобы клавиша срабатывала снова
+                        library._menuOpen = false
+                    end
                 end)
                 TS:Create(WaifuImg, TweenInfo.new(0.5), { ImageTransparency = 1 }):Play()
             end
@@ -935,10 +953,36 @@ local function CreateMenu(options)
             AddSettingsTab = AddSettingsTab,
             AddThemesTab = AddThemesTab,
             ToggleMenu = ToggleMenu,
-            SetMenuKey = function(key) MenuKey = key end,
+            SetMenuKey = function(key)
+                MenuKey = key
+                if BindBtnRef then
+                    BindBtnRef.Text = "Menu Bind: " .. key.Name:upper()
+                    BindBtnRef.TextColor3 = library.theme.G1
+                end
+            end,
             GetFlags = function() return library.flags end,
             GetTheme = function() return library.theme end,
-            SetTheme = function(colors) library.theme = colors end,
+            SetTheme = function(colors)
+                library.theme = colors
+                -- Обновляем все активные градиенты
+                for _, data in pairs(ActiveGradients) do
+                    if typeof(data) == "Instance" then
+                        data.Color = ColorSequence.new(colors.G1, colors.G2)
+                    elseif type(data) == "table" then
+                        if data.Type == "Toggle" then
+                            if library.flags[data.Flag] then
+                                TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                            end
+                        elseif data.Type == "Slider" then
+                            TS:Create(data.Object, TweenInfo.new(0.3), { BackgroundColor3 = colors.G1 }):Play()
+                        end
+                    end
+                end
+                if BindBtnRef then
+                    BindBtnRef.TextColor3 = colors.G1
+                end
+                CreateNotify("Celestial", "Тема обновлена", 1)
+            end,
             Notify = CreateNotify,
             Unload = function()
                 local Lighting = game:GetService("Lighting")
@@ -1059,10 +1103,7 @@ local function CreateMenu(options)
             library[k] = v
         end
         library._menuOpen = false
-        -- Открываем меню после загрузки (можно не открывать)
         CreateNotify("Celestial", "Меню загружено! Нажмите " .. MenuKey.Name:upper() .. " для открытия.", 4)
-        -- Автоматически открываем меню, если нужно (опционально)
-        -- library.ToggleMenu()
     end
 
     if showLoader then
@@ -1074,5 +1115,4 @@ local function CreateMenu(options)
     return library
 end
 
--- Возвращаем функцию для использования loadstring
 return CreateMenu
