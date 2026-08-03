@@ -216,8 +216,8 @@ local Library do
 
         Folders = {
             Directory = "slugware",
-            Configs = "lugware/Configs",
-            Assets = "lugware/Assets"
+            Configs = "slugware/Configs",
+            Assets = "slugware/Assets"
         },
 
         Images = { -- you're welcome to reupload the images and replace it with your own links
