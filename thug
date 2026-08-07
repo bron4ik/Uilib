@@ -824,31 +824,37 @@ local Library do
         return HttpService:JSONEncode(Config)
     end
 
-    Library.LoadConfig = function(self, Config)
-        local Decoded = HttpService:JSONDecode(Config)
+	Library.LoadConfig = function(self, Config) 
+	    local Decoded = HttpService:JSONDecode(Config) 
+	    local Success, Result = Library:SafeCall(function() 
+	        for Index, Value in Decoded do 
+	            local SetFunction = Library.SetFlags[Index] 
+	            if not SetFunction then continue end 
+	            
+	            -- 1. Визуально обновляем элемент в меню
+	            if type(Value) == "table" and Value.Key then 
+	                SetFunction(Value) 
+	            elseif type(Value) == "table" and Value.Color then 
+	                SetFunction(Value.Color, Value.Alpha) 
+	            else 
+	                SetFunction(Value) 
+	            end
+	            
+	            -- 2. Исправление: Находим сам элемент в Library.Flags и принудительно пинаем его Callback
+	            -- ThugSense сохраняет объекты элементов прямо в Library.Flags под их именами (Index)
+	            local Element = Library.Flags[Index]
+	            if Element and type(Element) == "table" and type(Element.Callback) == "function" then
+	                -- Безопасно запускаем поток с функцией чита, передавая новое значение
+	                task.spawn(Element.Callback, Element.Value or Value)
+	            end
+	        end 
+	    end) 
+	    
+	    if Success then 
+	        Library:Notification("Successfully loaded config and activated functions", 5, Color3.fromRGB(0, 255, 0)) 
+	    end 
+	end
 
-        local Success, Result = Library:SafeCall(function()
-            for Index, Value in Decoded do 
-                local SetFunction = Library.SetFlags[Index]
-
-                if not SetFunction then
-                    continue
-                end
-
-                if type(Value) == "table" and Value.Key then 
-                    SetFunction(Value)
-                elseif type(Value) == "table" and Value.Color then
-                    SetFunction(Value.Color, Value.Alpha)
-                else
-                    SetFunction(Value)
-                end
-            end
-        end)
-
-        if Success then 
-            Library:Notification("Successfully loaded config", 5, Color3.fromRGB(0, 255, 0))
-        end
-    end
 
     Library.DeleteConfig = function(self, Config)
         if isfile(Library.Folders.Configs .. "/" .. Config) then 
