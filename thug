@@ -824,35 +824,61 @@ local Library do
         return HttpService:JSONEncode(Config)
     end
 
-	Library.LoadConfig = function(self, Config) 
-	    local Decoded = HttpService:JSONDecode(Config) 
-	    local Success, Result = Library:SafeCall(function() 
-	        for Index, Value in Decoded do 
-	            local SetFunction = Library.SetFlags[Index] 
-	            if not SetFunction then continue end 
-	            
-	            -- 1. Визуально обновляем элемент в меню
-	            if type(Value) == "table" and Value.Key then 
-	                SetFunction(Value) 
-	            elseif type(Value) == "table" and Value.Color then 
-	                SetFunction(Value.Color, Value.Alpha) 
-	            else 
-	                SetFunction(Value) 
+	function library:LoadConfig(config)
+	    if table.find(self:GetConfigs(), config) then
+	        local Read, Config = pcall(function() 
+	            return game:GetService("HttpService"):JSONDecode(readfile(self.foldername .. "/" .. config .. self.fileext)) 
+	        end)
+	        
+	        Config = Read and Config or {}
+	
+	        for _, option in next, self.options do
+	            if option.hasInit and option.type ~= "button" and option.flag and not option.skipflag then
+	                local savedValue = Config[option.flag]
+	                
+	                if savedValue ~= nil then
+	                    -- 1. Исправление Колорпикеров (Color3)
+	                    if option.type == "color" or option.type == "colorpicker" then
+	                        local colorVal = savedValue
+	                        if type(savedValue) == "string" and savedValue:sub(1,1) == "#" then
+	                            colorVal = Color3.fromHex(savedValue)
+	                        elseif type(savedValue) == "table" and savedValue.r then
+	                            colorVal = Color3.new(savedValue.r, savedValue.g, savedValue.b)
+	                        end
+	                        
+	                        self.flags[option.flag] = colorVal
+	                        pcall(function() option:SetColor(colorVal) end)
+	
+	                        if Config[option.flag .. " Transparency"] and option.SetTrans then
+	                            pcall(function() option:SetTrans(Config[option.flag .. " Transparency"]) end)
+	                        end
+	
+	                    -- 2. Исправление Биндов (Enum.KeyCode)
+	                    elseif option.type == "bind" or option.type == "keybind" then
+	                        local keyVal = savedValue
+	                        if type(savedValue) == "string" then
+	                            keyVal = Enum.KeyCode[savedValue] or savedValue
+	                        end
+	                        
+	                        self.flags[option.flag] = keyVal
+	                        pcall(function() option:SetKey(keyVal) end)
+	
+	                    -- 3. Исправление Toggle, Slider, Dropdown
+	                    else
+	                        self.flags[option.flag] = savedValue
+	                        pcall(function() option:SetValue(savedValue) end)
+	                    end
+	
+	                    -- 4. Гарантированный вызов Callback для запуска логики в скрипте
+	                    if type(option.callback) == "function" then
+	                        task.spawn(function()
+	                            pcall(option.callback, self.flags[option.flag])
+	                        end)
+	                    end
+	                end
 	            end
-	            
-	            -- 2. Исправление: Находим сам элемент в Library.Flags и принудительно пинаем его Callback
-	            -- ThugSense сохраняет объекты элементов прямо в Library.Flags под их именами (Index)
-	            local Element = Library.Flags[Index]
-	            if Element and type(Element) == "table" and type(Element.Callback) == "function" then
-	                -- Безопасно запускаем поток с функцией чита, передавая новое значение
-	                task.spawn(Element.Callback, Element.Value or Value)
-	            end
-	        end 
-	    end) 
-	    
-	    if Success then 
-	        Library:Notification("Successfully loaded config and activated functions", 5, Color3.fromRGB(0, 255, 0)) 
-	    end 
+	        end
+	    end
 	end
 
 
