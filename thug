@@ -825,7 +825,7 @@ local Library do
     end
 
 	Library.LoadConfig = function(self, config)
-	    if table.find(self:GetConfigs(), config) then
+	    if table.find(self:GetConfig(), config) then
 	        local Read, Config = pcall(function() 
 	            return game:GetService("HttpService"):JSONDecode(readfile(self.foldername .. "/" .. config .. self.fileext)) 
 	        end)
